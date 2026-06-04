@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>台鐵 ATP 駕駛模擬系統</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700&family=JetBrains+Mono:wght@400;700&display=swap');
+
+        body {
+            font-family: 'Noto Sans TC', sans-serif;
+            background-color: #0f172a;
+            color: #f3f4f6;
+            overflow-x: hidden;
+        }
+
+        .signal-light { transition: fill 0.2s; }
+        .signal-green { fill: #10b981; filter: drop-shadow(0 0 8px #10b981); }
+        .signal-yellow { fill: #f59e0b; filter: drop-shadow(0 0 8px #f59e0b); }
+        .signal-red { fill: #ef4444; filter: drop-shadow(0 0 8px #ef4444); }
+        .signal-off { fill: #374151; }
+
+        .track-rail { stroke: #4b5563; stroke-width: 4; transition: stroke 0.3s; }
+        .track-occupied { stroke: #ef4444; filter: drop-shadow(0 0 4px rgba(239, 68, 68, 0.6)); }
+        .sleeper { stroke: #374151; stroke-width: 3; }
+        .digital-font { font-family: 'JetBrains Mono', monospace; }
+
+        /* 手柄樣式 */
+        input[type=range].mascon {
+            -webkit-appearance: none;
+            width: 100%;
+            height: 24px;
+            background: linear-gradient(to right, #ef4444 0%, #ef4444 45%, #9ca3af 50%, #10b981 55%, #10b981 100%);
+            border-radius: 8px;
+            outline: none;
+            border: 2px solid #374151;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.5);
+        }
+        input[type=range].mascon::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 36px;
+            height: 52px;
+            background: #e5e7eb;
+            border: 3px solid #374151;
+            border-radius: 6px;
+            cursor: pointer;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.6);
+            margin-top: -3px;
+            transition: background 0.1s;
+        }
+        input[type=range].mascon:active::-webkit-slider-thumb {
+            background: #d1d5db;
+        }
+
+        /* 觸控優化 */
+        .tap-btn {
+            transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .tap-btn:active {
+            transform: scale(0.96);
+            filter: brightness(0.9);
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col items-center p-2 md:p-4">
+
+    <!-- 頂部高質感導航欄 (完美整合返回按鈕，不回生活區) -->
+    <header class="w-full max-w-5xl bg-slate-950 border border-slate-800 px-4 md:px-6 py-3 flex justify-between items-center h-16 rounded-2xl relative z-30 shadow-lg mb-4">
+        <div class="flex items-center space-x-3">
+            <a href="../index.html" class="tap-btn p-2 bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded-xl text-slate-400 hover:text-white transition-colors" title="返回工作區">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
+            </a>
+            <div>
+                <h1 class="text-sm md:text-base font-bold text-white flex items-center gap-1.5">
+                    台鐵 ATP 駕駛模擬系統
+                    <span class="bg-amber-500/10 text-amber-400 text-[9px] px-1.5 py-0.5 rounded font-mono font-bold tracking-wider">ATP & BLOCK</span>
+                </h1>
+                <p class="text-[9px] text-slate-500 font-mono">TRA Automatic Train Protection & Block Simulator</p>
+            </div>
+        </div>
+        <p class="text-gray-400 text-[10px] md:text-xs hidden sm:block">請親自駕駛後車，體驗閉塞區間與 ATP 動態防護機制</p>
+    </header>
+
+    <div class="w-full max-w-5xl bg-gray-800 rounded-2xl shadow-2xl overflow-hidden border border-gray-700">
+        
+        <!-- Dashboard -->
+        <div class="bg-gray-900 p-3 md:p-4 border-b border-gray-700 grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 items-center">
+            
+            <div class="bg-black/60 p-2 md:p-3 rounded-lg border border-gray-600 text-center shadow-inner">
+                <div class="text-gray-400 text-[10px] md:text-xs mb-1">目前速度 SPEED</div>
+                <div class="text-2xl md:text-3xl font-bold digital-font text-white">
+                    <span id="speed-val">0</span> <span class="text-xs md:text-sm text-gray-500">km/h</span>
+                </div>
+            </div>
+
+            <div class="bg-black/60 p-2 md:p-3 rounded-lg border border-gray-600 text-center relative overflow-hidden shadow-inner">
+                <div class="text-gray-400 text-[10px] md:text-xs mb-1">ATP 速限 LIMIT</div>
+                <div class="text-2xl md:text-3xl font-bold digital-font text-yellow-400">
+                    <span id="limit-val">130</span> <span class="text-xs md:text-sm text-gray-500">km/h</span>
+                </div>
+                <!-- 警告閃燈 -->
+                <div id="atp-warning" class="absolute inset-0 bg-red-600/40 hidden animate-pulse flex items-center justify-center backdrop-blur-sm">
+                    <span class="font-bold text-red-100 bg-red-900/80 px-2 py-1 rounded text-xs border border-red-500">ATP 介入中</span>
+                </div>
+            </div>
+
+            <div class="bg-black/60 p-2 md:p-3 rounded-lg border border-gray-600 flex flex-col items-center shadow-inner">
+                <div class="text-gray-400 text-[10px] md:text-xs mb-2">前方號誌 NEXT SIGNAL</div>
+                <div class="flex gap-2 md:gap-3">
+                    <div id="dash-light-g" class="w-4 h-4 rounded-full bg-green-900 border border-green-700"></div>
+                    <div id="dash-light-y" class="w-4 h-4 rounded-full bg-yellow-900 border border-yellow-700"></div>
+                    <div id="dash-light-r" class="w-4 h-4 rounded-full bg-red-900 border border-red-700"></div>
+                </div>
+                <div id="signal-text" class="text-[10px] md:text-xs font-bold mt-1.5 text-gray-500">DETECTING</div>
+            </div>
+
+            <div class="bg-black/60 p-2 md:p-3 rounded-lg border border-gray-600 text-center shadow-inner">
+                <div class="text-gray-400 text-[10px] md:text-xs mb-1">當前區間 CURRENT</div>
+                <div id="current-block-text" class="text-lg md:text-xl font-bold text-blue-300 digital-font">
+                    BLOCK 1
+                </div>
+            </div>
+        </div>
+
+        <!-- Visualization -->
+        <div class="relative w-full bg-[#0f1218] p-2 md:p-4 overflow-hidden h-48 md:h-64 select-none">
+            <div class="absolute inset-0 opacity-10" style="background-image: linear-gradient(#374151 1px, transparent 1px); background-size: 50px 50px;"></div>
+
+            <!-- ViewBox 讓火車圖形自適應 -->
+            <svg id="railway-svg" viewBox="0 0 1000 240" preserveAspectRatio="xMidYMid meet" class="w-full h-full relative z-10">
+                <g id="tracks-layer"></g>
+                <g id="signals-layer"></g>
+                <g id="trains-layer">
+                    <!-- Train A (Obstacle) -->
+                    <g id="train-a-group">
+                        <rect width="60" height="26" rx="4" y="117" x="0" fill="#3b82f6" stroke="#93c5fd" stroke-width="2"></rect>
+                        <text x="30" y="105" fill="#60a5fa" font-size="14" font-weight="bold" text-anchor="middle">Train A</text>
+                    </g>
+                    <!-- Train B (Player) -->
+                    <g id="train-b-group">
+                        <rect width="60" height="26" rx="4" y="117" x="0" fill="#f97316" stroke="#fdba74" stroke-width="2"></rect>
+                        <text x="30" y="105" fill="#fdba74" font-size="14" font-weight="bold" text-anchor="middle">Train B</text>
+                        <text x="30" y="135" fill="#7c2d12" font-size="12" font-weight="bold" text-anchor="middle">YOU</text>
+                    </g>
+                </g>
+            </svg>
+        </div>
+
+        <!-- Controls -->
+        <div class="bg-gray-800 p-4 md:p-6 border-t border-gray-700 grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8">
+            
+            <!-- 左側：玩家控制與前車控制 -->
+            <div class="flex flex-col justify-between gap-6">
+                <!-- 玩家控制區 -->
+                <div class="bg-gray-900/50 p-4 rounded-xl border border-gray-700">
+                    <label class="text-orange-400 font-bold flex justify-between mb-4">
+                        <span class="flex items-center gap-2">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"></path></svg>
+                            您的駕駛手柄 (Master Controller)
+                        </span>
+                        <span id="throttle-val" class="text-white bg-gray-800 px-2 py-1 rounded">惰行 (0%)</span>
+                    </label>
+                    <div class="relative h-14 flex items-center">
+                        <span class="absolute left-2 text-xs font-bold text-red-300 pointer-events-none drop-shadow-md">煞車 (Brake)</span>
+                        <span class="absolute right-2 text-xs font-bold text-green-300 pointer-events-none drop-shadow-md">加速 (Power)</span>
+                        <input type="range" id="mascon" min="-100" max="100" value="0" step="5" class="mascon">
+                    </div>
+                </div>
+
+                <!-- 環境設定區 -->
+                <div class="bg-gray-900/50 p-4 rounded-xl border border-gray-700">
+                    <label class="text-blue-400 font-bold flex items-center gap-2 mb-3">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"></path></svg>
+                        設定前車位置 (製造障礙)
+                    </label>
+                    <input type="range" id="train-a-slider" min="100" max="950" value="850" class="w-full h-3 bg-gray-700 rounded-lg appearance-none cursor-pointer">
+                </div>
+            </div>
+
+            <!-- 右側：教學說明區 -->
+            <div class="bg-gray-900 p-4 md:p-5 rounded-xl border border-gray-600 shadow-inner flex flex-col justify-center">
+                <h3 class="text-white font-bold text-lg mb-3 flex items-center gap-2 border-b border-gray-700 pb-2">
+                    <svg class="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    閉塞區間與 ATP 核心觀念
+                </h3>
+                <ul class="space-y-4 text-sm text-gray-300 leading-relaxed">
+                    <li class="flex items-start gap-3">
+                        <div class="w-3 h-3 mt-1 rounded-full bg-blue-500 flex-shrink-0"></div>
+                        <div>
+                            <strong class="text-blue-300 block">閉塞原理 (Block System)</strong>
+                            鐵路被劃分為多個「閉塞區間」。基本原則是：<strong>同一個區間內，絕對不允許有兩列火車同時存在。</strong> 軌道電路會偵測列車位置（軌軌變紅），並自動切換後方號誌。
+                        </div>
+                    </li>
+                    <li class="flex items-start gap-3">
+                        <div class="w-3 h-3 mt-1 rounded-full bg-yellow-500 flex-shrink-0"></div>
+                        <div>
+                            <strong class="text-yellow-300 block">注意號誌 (Yellow Signal)</strong>
+                            當前方號誌為黃燈，代表「下一個區間是紅燈」。ATP 系統會立刻將速限降至 60 km/h。若司機未減速，系統將強制切斷動力並啟動煞車（ATP 介入），確保安全。
+                        </div>
+                    </li>
+                    <li class="flex items-start gap-3">
+                        <div class="w-3 h-3 mt-1 rounded-full bg-red-500 flex-shrink-0"></div>
+                        <div>
+                            <strong class="text-red-300 block">險阻號誌 (Red Signal)</strong>
+                            紅燈代表前方區間有車。當接近紅燈時，ATP 會計算一條「停車曲線」。若列車速度高於這條安全曲線，系統將啟動緊急煞車，強迫列車在紅燈前完全停止。
+                        </div>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- 模擬控制引擎 (純 Vanilla JS 核心邏輯) -->
+    <script>
+        // --- 核心設定 ---
+        const TRACK_LENGTH = 1000;
+        const NUM_BLOCKS = 8;
+        const BLOCK_SIZE = TRACK_LENGTH / NUM_BLOCKS; // 125px
+        const TRAIN_WIDTH = 60;
+        
+        // --- 物理常數 ---
+        const FRICTION = 0.006; 
+        const ACCEL_POWER = 0.05; 
+        const BRAKE_POWER = 0.08; 
+        const MAX_SPEED_PX = 3.6;     // 約 130 km/h
+        const YELLOW_SPEED_PX = 1.66; // 約 60 km/h
+
+        // --- 狀態變數 ---
+        let trainAPos = 850;
+        let trainBPos = 10;
+        let trainBSpeed = 0; 
+        let throttle = 0; 
+        
+        // 陣列儲存：視覺上的號誌 (包含A與B) & ATP專用號誌 (僅包含A)
+        let visualSignals = new Array(NUM_BLOCKS).fill(0); 
+        let atpSignals = new Array(NUM_BLOCKS).fill(0); 
+
+        // --- DOM ---
+        const els = {
+            tracks: document.getElementById('tracks-layer'),
+            signals: document.getElementById('signals-layer'),
+            trainA: document.getElementById('train-a-group'),
+            trainB: document.getElementById('train-b-group'),
+            sliderA: document.getElementById('train-a-slider'),
+            mascon: document.getElementById('mascon'),
+            throttleDisplay: document.getElementById('throttle-val'),
+            speedVal: document.getElementById('speed-val'),
+            limitVal: document.getElementById('limit-val'),
+            currentBlockText: document.getElementById('current-block-text'),
+            atpWarning: document.getElementById('atp-warning'),
+            signalText: document.getElementById('signal-text'),
+            lightG: document.getElementById('dash-light-g'),
+            lightY: document.getElementById('dash-light-y'),
+            lightR: document.getElementById('dash-light-r'),
+        };
+
+        // --- 初始化軌道 ---
+        function init() {
+            for (let i = 0; i < NUM_BLOCKS; i++) {
+                const xStart = i * BLOCK_SIZE;
+                const xEnd = (i + 1) * BLOCK_SIZE;
+
+                // 軌道鐵軌
+                const rail = createSvgEl('line', {
+                    x1: xStart, y1: 130, x2: xEnd, y2: 130,
+                    class: 'track-rail', id: `track-${i}`
+                });
+                els.tracks.appendChild(rail);
+
+                // 枕木
+                const sleeperG = createSvgEl('g', {});
+                for(let sx = xStart + 5; sx < xEnd; sx+=15) {
+                    sleeperG.appendChild(createSvgEl('line', {
+                        x1: sx, y1: 124, x2: sx, y2: 136, class: 'sleeper'
+                    }));
+                }
+                els.tracks.insertBefore(sleeperG, rail);
+
+                // 區間分隔線
+                els.tracks.appendChild(createSvgEl('line', {
+                    x1: xStart, y1: 90, x2: xStart, y2: 170,
+                    stroke: '#334155', 'stroke-dasharray': '4 4'
+                }));
+                const txt = createSvgEl('text', {
+                    x: xStart + 5, y: 185, fill: '#6b7280', 'font-size': 11, 'font-family': 'monospace'
+                });
+                txt.textContent = `BLOCK ${i+1}`;
+                els.tracks.appendChild(txt);
+
+                // 號誌機
+                const sigG = createSvgEl('g', { transform: `translate(${xStart+5}, 80)` });
+                sigG.appendChild(createSvgEl('path', { d: 'M-2,0 L2,0 L2,50 L-2,50 Z', fill: '#4b5563' }));
+                sigG.appendChild(createSvgEl('rect', { x: -8, y: -36, width: 16, height: 40, rx: 4, fill: '#1f2937', stroke: '#374151' }));
+                
+                ['green', 'yellow', 'red'].forEach((c, idx) => {
+                    sigG.appendChild(createSvgEl('circle', {
+                        cx: 0, cy: -28 + (idx*12), r: 4,
+                        id: `signal-${i}-${c}`, class: 'signal-light signal-off'
+                    }));
+                });
+                els.signals.appendChild(sigG);
+            }
+        }
+
+        // --- 主迴圈 ---
+        function update() {
+            trainAPos = parseInt(els.sliderA.value);
+            throttle = parseInt(els.mascon.value);
+            updateThrottleDisplay();
+
+            // 1. 先計算軌道號誌狀態
+            calculateSignalStates();
+
+            // 2. 進行 ATP 邏輯判斷
+            const atpResult = calculateATP();
+
+            // 3. 物理運算 (移動列車)
+            applyPhysics(atpResult);
+
+            // 4. 更新畫面
+            render(atpResult);
+
+            requestAnimationFrame(update);
+        }
+
+        // --- 號誌計算 ---
+        function calculateSignalStates() {
+            // 偵測佔用狀況
+            const occA = new Array(NUM_BLOCKS).fill(false);
+            const occAll = new Array(NUM_BLOCKS).fill(false);
+            
+            function checkOcc(arr, pos, w) {
+                const s = pos, e = pos + w;
+                for(let i=0; i<NUM_BLOCKS; i++) {
+                    const bs = i * BLOCK_SIZE, be = (i+1)*BLOCK_SIZE;
+                    if (s < be && e > bs) arr[i] = true;
+                }
+            }
+            
+            checkOcc(occA, trainAPos, TRAIN_WIDTH);
+            checkOcc(occAll, trainAPos, TRAIN_WIDTH);
+            checkOcc(occAll, trainBPos, TRAIN_WIDTH);
+
+            // 計算 ATP 專用號誌 (僅考慮前車A，這樣後車B才不會被自己的佔用干擾)
+            let nextA = 0;
+            for(let i=NUM_BLOCKS-1; i>=0; i--) {
+                if(occA[i]) atpSignals[i] = 2;
+                else if(nextA === 2) atpSignals[i] = 1;
+                else atpSignals[i] = 0;
+                nextA = atpSignals[i];
+            }
+
+            // 計算視覺呈現的號誌 (真實反映鐵軌狀態)
+            let nextAll = 0;
+            for(let i=NUM_BLOCKS-1; i>=0; i--) {
+                if(occAll[i]) visualSignals[i] = 2;
+                else if(nextAll === 2) visualSignals[i] = 1;
+                else visualSignals[i] = 0;
+                nextAll = visualSignals[i];
+            }
+
+            // 更新軌道線條顏色
+            for(let i=0; i<NUM_BLOCKS; i++) {
+                const tr = document.getElementById(`track-${i}`);
+                if(occAll[i]) tr.classList.add('track-occupied');
+                else tr.classList.remove('track-occupied');
+            }
+        }
+
+        // --- ATP 邏輯 ---
+        function calculateATP() {
+            const headPos = trainBPos + TRAIN_WIDTH;
+            const currentBlock = Math.floor(headPos / BLOCK_SIZE);
+            const nextBlock = currentBlock + 1;
+
+            // 取得目前所在區間號誌
+            let currentSig = currentBlock < NUM_BLOCKS ? atpSignals[currentBlock] : 0;
+            // 取得前方號誌
+            let nextSig = nextBlock < NUM_BLOCKS ? atpSignals[nextBlock] : 0;
+
+            let speedLimit = MAX_SPEED_PX;
+            let intervention = false;
+
+            // 基礎速限邏輯
+            if (currentSig === 0) speedLimit = MAX_SPEED_PX;
+            else if (currentSig === 1) speedLimit = YELLOW_SPEED_PX;
+            else if (currentSig === 2) speedLimit = 0; // 不小心闖入紅燈區
+
+            // 紅燈煞車曲線 (Braking Curve)
+            if (nextSig === 2) {
+                const stopLine = nextBlock * BLOCK_SIZE - TRAIN_WIDTH - 5;
+                const distToStop = stopLine - trainBPos;
+                
+                // 距離紅燈 80px 時開始啟動強制煞車曲線
+                if (distToStop > 0 && distToStop < 80) {
+                    const curveSpeed = (distToStop / 80) * YELLOW_SPEED_PX;
+                    if (curveSpeed < speedLimit) speedLimit = curveSpeed;
+                } else if (distToStop <= 0) {
+                    speedLimit = 0;
+                    trainBPos = stopLine;
+                }
+            }
+
+            // 防撞保護
+            const distToA = trainAPos - trainBPos - TRAIN_WIDTH;
+            if (distToA < 120) {
+                const colLimit = (distToA / 120) * 1.5;
+                if (colLimit < speedLimit) speedLimit = colLimit;
+                if (distToA < 5) speedLimit = 0;
+            }
+
+            // 判斷是否需要介入 (0.1 緩衝區)
+            if (trainBSpeed > speedLimit + 0.1) {
+                intervention = true;
+            }
+
+            return { speedLimit, intervention, nextSig, currentBlock };
+        }
+
+        // --- 物理引擎 ---
+        function applyPhysics(atp) {
+            let force = 0;
+
+            if (atp.intervention) {
+                // ATP 啟動，強制煞車
+                force = -BRAKE_POWER * 1.5; 
+            } else {
+                // 玩家控制
+                if (throttle > 0) {
+                    force = (throttle / 100) * ACCEL_POWER;
+                } else if (throttle < 0) {
+                    force = (throttle / 100) * BRAKE_POWER; 
+                }
+            }
+
+            // 摩擦力
+            if (trainBSpeed > 0) force -= FRICTION;
+            
+            trainBSpeed += force;
+
+            // 限制
+            if (trainBSpeed < 0) trainBSpeed = 0;
+            if (trainBSpeed > MAX_SPEED_PX * 1.1) trainBSpeed = MAX_SPEED_PX * 1.1; 
+
+            trainBPos += trainBSpeed;
+            if (trainBPos < 0) trainBPos = 0;
+            if (trainBPos + TRAIN_WIDTH > trainAPos) {
+                trainBPos = trainAPos - TRAIN_WIDTH;
+                trainBSpeed = 0;
+            }
+        }
+
+        // --- 渲染畫面 ---
+        function render(atp) {
+            els.trainA.setAttribute('transform', `translate(${trainAPos}, 0)`);
+            els.trainB.setAttribute('transform', `translate(${trainBPos}, 0)`);
+
+            // 速度轉換
+            const speedKmh = Math.round((trainBSpeed / MAX_SPEED_PX) * 130);
+            const limitKmh = Math.round((atp.speedLimit / MAX_SPEED_PX) * 130);
+            
+            els.speedVal.textContent = speedKmh;
+            els.limitVal.textContent = limitKmh;
+
+            // ATP 警告視覺
+            if (atp.intervention) {
+                els.speedVal.className = "text-red-500 font-bold digital-font";
+                els.atpWarning.classList.remove('hidden');
+            } else {
+                els.speedVal.className = "text-white font-bold digital-font";
+                els.atpWarning.classList.add('hidden');
+            }
+
+            // 區間顯示
+            const blockNum = atp.currentBlock >= NUM_BLOCKS ? "OUT" : atp.currentBlock + 1;
+            els.currentBlockText.textContent = `BLOCK ${blockNum}`;
+
+            // 儀表板號誌顯示 (Next Signal)
+            resetDashLights();
+            if (atp.nextSig === 0) {
+                els.lightG.classList.add('bg-green-500', 'shadow-[0_0_10px_#22c55e]');
+                els.signalText.textContent = "PROCEED (綠)";
+                els.signalText.className = "text-xs font-bold mt-1 text-green-500";
+            } else if (atp.nextSig === 1) {
+                els.lightY.classList.add('bg-yellow-500', 'shadow-[0_0_10px_#eab308]');
+                els.signalText.textContent = "SLOW (黃)";
+                els.signalText.className = "text-xs font-bold mt-1 text-yellow-500";
+            } else {
+                els.lightR.classList.add('bg-red-600', 'shadow-[0_0_10px_#ef4444]');
+                els.signalText.textContent = "STOP (紅)";
+                els.signalText.className = "text-xs font-bold mt-1 text-red-500";
+            }
+
+            // 更新場景中的所有號誌機燈光
+            visualSignals.forEach((s, i) => {
+                const g = document.getElementById(`signal-${i}-green`);
+                const y = document.getElementById(`signal-${i}-yellow`);
+                const r = document.getElementById(`signal-${i}-red`);
+                if(g) {
+                    g.setAttribute('class', s===0 ? 'signal-light signal-green' : 'signal-light signal-off');
+                    y.setAttribute('class', s===1 ? 'signal-light signal-yellow' : 'signal-light signal-off');
+                    r.setAttribute('class', s===2 ? 'signal-light signal-red' : 'signal-light signal-off');
+                }
+            });
+        }
+
+        // --- 輔助函式 ---
+        function createSvgEl(type, attrs) {
+            const el = document.createElementNS('http://www.w3.org/2000/svg', type);
+            for(let k in attrs) el.setAttribute(k, attrs[k]);
+            return el;
+        }
+
+        function resetDashLights() {
+            els.lightG.className = "w-4 h-4 rounded-full bg-green-900 border border-green-700";
+            els.lightY.className = "w-4 h-4 rounded-full bg-yellow-900 border border-yellow-700";
+            els.lightR.className = "w-4 h-4 rounded-full bg-red-900 border border-red-700";
+        }
+
+        function updateThrottleDisplay() {
+            const val = els.mascon.value;
+            if (val > 0) {
+                els.throttleDisplay.textContent = `加速 P${Math.ceil(val/20)}`;
+                els.throttleDisplay.className = "text-green-400 font-bold bg-gray-800 px-2 py-1 rounded";
+            } else if (val < 0) {
+                els.throttleDisplay.textContent = `煞車 B${Math.ceil(Math.abs(val)/20)}`;
+                els.throttleDisplay.className = "text-red-400 font-bold bg-gray-800 px-2 py-1 rounded";
+            } else {
+                els.throttleDisplay.textContent = "惰行 (N)";
+                els.throttleDisplay.className = "text-gray-400 font-bold bg-gray-800 px-2 py-1 rounded";
+            }
+        }
+
+        init();
+        update();
+    </script>
+</body>
+</html>
