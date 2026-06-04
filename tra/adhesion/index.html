@@ -1,0 +1,1243 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>鐵路車輛黏著與制動防滑模擬系統</title>
+    <!-- Tailwind CSS (樣式庫) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- React & ReactDOM (前端框架) -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+    <!-- Babel (瀏覽器端 JSX 編譯器) -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+        /* 移除 Chrome/Safari/Edge 的數字輸入框上下微調箭頭 */
+        input::-webkit-outer-spin-button,
+        input::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        /* 移除 Firefox 的數字輸入框上下微調箭頭 */
+        input[type=number] {
+            -moz-appearance: textfield;
+        }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 font-sans min-h-screen">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef, useMemo } = React;
+
+        // --- React 内置 SVG 圖標組件 (取代 Lucide，保證 100% 成功加載) ---
+        const IconArrowLeft = () => (
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+            </svg>
+        );
+
+        const IconBookOpen = ({ className = "w-6 h-6" }) => (
+            <svg className={className} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+            </svg>
+        );
+
+        const IconActivity = ({ className = "w-6 h-6" }) => (
+            <svg className={className} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 002 2h2a2 2 0 002-2z" />
+            </svg>
+        );
+
+        const IconZap = ({ className = "w-4 h-4" }) => (
+            <svg className={className} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg>
+        );
+
+        const IconCloudRain = ({ className = "w-5 h-5" }) => (
+            <svg className={className} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v1.512M12 19.5v1.5M4.929 4.929l1.06 1.061M17.01 17.01l1.061 1.06M3 12h1.5M19.5 12H21M4.929 19.071l1.061-1.061M17.01 6.99l1.061 1.06M12 8a4 4 0 100 8 4 4 0 000-8z" />
+            </svg>
+        );
+
+        const IconSun = ({ className = "w-5 h-5" }) => (
+            <svg className={className} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m0-12.728l.707.707m11.314 11.314l.707.707M12 5a7 7 0 100 14 7 7 0 000-14z" />
+            </svg>
+        );
+
+        const IconSnowflake = ({ className = "w-5 h-5" }) => (
+            <svg className={className} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v18m9-9H3m14-6L7 16m0-8l10 8" />
+            </svg>
+        );
+
+        const IconSettings = ({ className = "w-24 h-24" }) => (
+            <svg className={className} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+        );
+
+        const IconInfo = ({ className = "w-4 h-4" }) => (
+            <svg className={className} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+        );
+
+        const IconAlertTriangle = ({ className = "w-4 h-4" }) => (
+            <svg className={className} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+        );
+
+        const IconTrendingUp = ({ className = "w-4 h-4" }) => (
+            <svg className={className} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+            </svg>
+        );
+
+        const IconDisc = ({ className = "w-5 h-5" }) => (
+            <svg className={className} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <circle cx="12" cy="12" r="10" />
+                <circle cx="12" cy="12" r="3" />
+            </svg>
+        );
+
+        const IconSliders = ({ className = "w-4 h-4" }) => (
+            <svg className={className} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+            </svg>
+        );
+
+        // -----------------------------------------------------------------------------
+        // Component: Symmetric Adhesion Graph (對稱式 蠕滑/滑走 黏著係數曲線圖組件) - 優化高解析度與對比
+        // -----------------------------------------------------------------------------
+        const AdhesionGraph = ({ currentSlip, weather }) => {
+            const canvasRef = useRef(null);
+
+            useEffect(() => {
+                const canvas = canvasRef.current;
+                if (!canvas) return;
+                const ctx = canvas.getContext('2d');
+                
+                // 處理 High-DPI (Retina) 螢幕防模糊
+                const dpr = window.devicePixelRatio || 1;
+                const rect = canvas.getBoundingClientRect();
+                canvas.width = rect.width * dpr;
+                canvas.height = rect.height * dpr;
+                ctx.scale(dpr, dpr);
+
+                const width = rect.width;
+                const height = rect.height;
+
+                // 清除畫布
+                ctx.clearRect(0, 0, width, height);
+                ctx.fillStyle = '#090d16'; // 飽和深海藍黑背景
+                ctx.fillRect(0, 0, width, height);
+
+                const p = 35; // 邊距
+                const graphW = width - p * 2;
+                const graphH = height - p * 2;
+                const centerX = p + graphW / 2;
+
+                // 繪製網格
+                ctx.strokeStyle = '#1e293b';
+                ctx.lineWidth = 1;
+                for (let x = p; x <= width - p; x += graphW / 10) {
+                    ctx.beginPath();
+                    ctx.moveTo(x, p);
+                    ctx.lineTo(x, height - p);
+                    ctx.stroke();
+                }
+                for (let y = p; y <= height - p; y += graphH / 4) {
+                    ctx.beginPath();
+                    ctx.moveTo(p, y);
+                    ctx.lineTo(width - p, y);
+                    ctx.stroke();
+                }
+
+                // 繪製座標軸 (雙向對稱 X 軸與 Y 軸)
+                ctx.strokeStyle = '#64748b';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(p, height - p);
+                ctx.lineTo(width - p, height - p); // X 軸
+                ctx.moveTo(centerX, p);
+                ctx.lineTo(centerX, height - p); // Y 軸 (中心零點)
+                ctx.stroke();
+
+                // 標籤
+                ctx.fillStyle = '#94a3b8';
+                ctx.font = 'bold 10px "JetBrains Mono", sans-serif';
+                ctx.fillText('黏著係數 (μ)', centerX + 8, p + 10);
+                ctx.fillText('← 滑走 (Slide) %  |  空轉 (Slip) % →', p + 12, height - p + 22);
+
+                // 刻度標籤
+                ctx.fillText('-50%', p - 5, height - p + 12);
+                ctx.fillText('0', centerX - 3, height - p + 12);
+                ctx.fillText('+50%', width - p - 20, height - p + 12);
+                ctx.fillText('0.4', centerX - 22, p + 8);
+
+                // 根據天氣決定物理參數
+                let peakMu = 0.35; // 乾燥
+                let peakSlip = 12; // 最佳黏著點 (12%)
+                let color = '#3b82f6';
+
+                if (weather === 'wet') {
+                    peakMu = 0.15; // 潮濕
+                    peakSlip = 10;
+                    color = '#0ea5e9';
+                } else if (weather === 'ice') {
+                    peakMu = 0.06; // 結霜
+                    peakSlip = 6;
+                    color = '#2dd4bf';
+                }
+
+                // 繪製左右對稱的黏著特性曲線 (Pacejka 簡化模型)
+                ctx.strokeStyle = color;
+                ctx.lineWidth = 3.5;
+                ctx.beginPath();
+
+                for (let x = 0; x <= graphW; x += 2) {
+                    const slipVal = ((x / graphW) * 100) - 50; 
+                    const absSlip = Math.abs(slipVal);
+                    let mu = 0;
+
+                    if (absSlip <= peakSlip) {
+                        const ratio = absSlip / peakSlip;
+                        mu = peakMu * ratio * (2 - ratio);
+                    } else {
+                        const decay = (absSlip - peakSlip) * 0.07;
+                        mu = peakMu * Math.exp(-decay);
+                        if (mu < peakMu * 0.25) mu = peakMu * 0.25;
+                    }
+
+                    const plotX = p + x;
+                    const plotY = (height - p) - (mu / 0.4) * graphH;
+
+                    if (x === 0) ctx.moveTo(plotX, plotY);
+                    else ctx.lineTo(plotX, plotY);
+                }
+                ctx.stroke();
+
+                // 繪製「最佳黏著區」高亮範圍 (左右對稱)
+                ctx.fillStyle = 'rgba(16, 185, 129, 0.18)'; // 提高透明度增加對比
+                // 右側牽引最佳區
+                const rightPeakXStart = centerX + ((peakSlip - 3) / 100) * graphW;
+                const peakWidthPx = (6 / 100) * graphW;
+                ctx.fillRect(rightPeakXStart, p, peakWidthPx, graphH);
+                // 左側制動最佳區
+                const leftPeakXStart = centerX - ((peakSlip + 3) / 100) * graphW;
+                ctx.fillRect(leftPeakXStart, p, peakWidthPx, graphH);
+
+                ctx.fillStyle = '#10b981';
+                ctx.font = 'bold 9px sans-serif';
+                ctx.fillText('最佳黏著區', rightPeakXStart, p - 6);
+                ctx.fillText('最佳黏著區', leftPeakXStart, p - 6);
+
+                // 繪製當前狀態點
+                const clampedSlip = Math.max(-50, Math.min(currentSlip, 50)); 
+                const pointX = centerX + (clampedSlip / 100) * graphW;
+                
+                const absCurrentSlip = Math.abs(clampedSlip);
+                let currentMu = 0;
+                if (absCurrentSlip <= peakSlip) {
+                    const ratio = absCurrentSlip / peakSlip;
+                    currentMu = peakMu * ratio * (2 - ratio);
+                } else {
+                    const decay = (absCurrentSlip - peakSlip) * 0.07;
+                    currentMu = peakMu * Math.exp(-decay);
+                    if (currentMu < peakMu * 0.25) currentMu = peakMu * 0.25;
+                }
+                const pointY = (height - p) - (currentMu / 0.4) * graphH;
+
+                // 狀態點顏色邏輯 (打滑失控顯示紅點)
+                const isLosingGrip = absCurrentSlip > peakSlip + 4;
+                
+                // 外發光光暈
+                ctx.shadowColor = isLosingGrip ? '#f43f5e' : '#10b981';
+                ctx.shadowBlur = 12;
+                ctx.fillStyle = isLosingGrip ? '#f43f5e' : '#10b981';
+                ctx.beginPath();
+                ctx.arc(pointX, pointY, 7, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.shadowBlur = 0; // 重置外發光
+
+                // 繪製垂直輔助虛線
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+                ctx.lineWidth = 1;
+                ctx.setLineDash([3, 3]);
+                ctx.beginPath();
+                ctx.moveTo(pointX, height - p);
+                ctx.lineTo(pointX, pointY);
+                ctx.stroke();
+                ctx.setLineDash([]);
+
+                // 狀態標籤背景板，提高可視度
+                ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+                const stateLabel = clampedSlip >= 0 ? '空轉' : '滑走';
+                const textStr = `${stateLabel}: ${clampedSlip.toFixed(1)}%, μ=${currentMu.toFixed(2)}`;
+                const textWidth = ctx.measureText(textStr).width;
+                
+                const boxX = pointX > centerX ? pointX - textWidth - 15 : pointX + 10;
+                const boxY = pointY - 20;
+                ctx.fillRect(boxX - 4, boxY - 10, textWidth + 8, 16);
+                
+                ctx.fillStyle = isLosingGrip ? '#fda4af' : '#ffffff';
+                ctx.font = 'bold 10px sans-serif';
+                ctx.fillText(textStr, boxX, boxY + 2);
+
+            }, [currentSlip, weather]);
+
+            return (
+                <canvas 
+                    ref={canvasRef} 
+                    className="w-full h-44 sm:h-52 lg:h-[220px] bg-slate-950 rounded-2xl shadow-inner border border-slate-800" 
+                />
+            );
+        };
+
+        // -----------------------------------------------------------------------------
+        // Component: Rolling Chart (時間序列圖 - 車速 vs 輪速) - 高畫質自適應
+        // -----------------------------------------------------------------------------
+        const TimeSeriesChart = ({ dataHistory }) => {
+            const canvasRef = useRef(null);
+
+            useEffect(() => {
+                const canvas = canvasRef.current;
+                if (!canvas) return;
+                const ctx = canvas.getContext('2d');
+                
+                // 處理 High-DPI (Retina)
+                const dpr = window.devicePixelRatio || 1;
+                const rect = canvas.getBoundingClientRect();
+                canvas.width = rect.width * dpr;
+                canvas.height = rect.height * dpr;
+                ctx.scale(dpr, dpr);
+
+                const width = rect.width;
+                const height = rect.height;
+
+                ctx.clearRect(0, 0, width, height);
+                ctx.fillStyle = '#090d16';
+                ctx.fillRect(0, 0, width, height);
+
+                // 繪製網格
+                ctx.strokeStyle = '#141e30';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                for (let x = 0; x < width; x += 50) { ctx.moveTo(x, 0); ctx.lineTo(x, height); }
+                for (let y = 0; y < height; y += 30) { ctx.moveTo(0, y); ctx.lineTo(width, y); }
+                ctx.stroke();
+
+                if (dataHistory.length < 2) return;
+
+                // 縮放比例
+                const maxSpeed = 120; // 最大顯示速度 km/h
+                const scaleY = height / maxSpeed;
+                const stepX = width / (dataHistory.length - 1);
+
+                // 繪製曲線函數
+                const drawLine = (color, valueKey, lineWidth = 2, isDashed = false) => {
+                    ctx.strokeStyle = color;
+                    ctx.lineWidth = lineWidth;
+                    if (isDashed) ctx.setLineDash([4, 4]);
+                    else ctx.setLineDash([]);
+                    
+                    ctx.beginPath();
+                    dataHistory.forEach((point, i) => {
+                        const x = i * stepX;
+                        const y = height - (point[valueKey] * scaleY);
+                        if (i === 0) ctx.moveTo(x, y);
+                        else ctx.lineTo(x, y);
+                    });
+                    ctx.stroke();
+                };
+
+                // 繪製車速 (高對比藍實線)
+                drawLine('#3b82f6', 'speed', 3.5, false);
+                // 繪製輪速 (亮紅虛線)
+                drawLine('#f43f5e', 'wheelSpeed', 2.5, true);
+                ctx.setLineDash([]); // 重置
+
+                // 標例文字背景框
+                ctx.fillStyle = 'rgba(15, 23, 42, 0.8)';
+                ctx.fillRect(10, 8, 260, 36);
+                ctx.strokeStyle = '#1e293b';
+                ctx.strokeRect(10, 8, 260, 36);
+
+                ctx.fillStyle = '#94a3b8';
+                ctx.font = 'bold 9px "JetBrains Mono", monospace';
+                ctx.fillText('實際車速 (Train Speed)', 20, 22);
+                ctx.fillStyle = '#3b82f6';
+                ctx.fillRect(155, 14, 20, 6);
+
+                ctx.fillStyle = '#94a3b8';
+                ctx.fillText('車輪轉速 (Wheel Speed)', 20, 34);
+                ctx.fillStyle = '#f43f5e';
+                ctx.fillRect(155, 29, 20, 3);
+
+            }, [dataHistory]);
+
+            return <canvas ref={canvasRef} className="w-full h-36 sm:h-44 lg:h-48 bg-slate-950 rounded-xl border border-slate-850" />;
+        };
+
+        // -----------------------------------------------------------------------------
+        // Component: Physics Logic Hook (列車核心動力學與防滑走/防空轉邏輯)
+        // -----------------------------------------------------------------------------
+        const useTrainPhysics = () => {
+            const [state, setState] = useState({
+                mascon: 0,         // -100% (極限制動) ~ +100% (極限牽引)
+                speed: 0,          // km/h
+                wheelSpeed: 0,     // km/h
+                slipRatio: 0,      // % (正值代表空轉，負值代表滑走)
+                distance: 0,       // 行駛里程 (公尺)
+                sanding: false,    // 是否在撒砂
+                sandLevel: 100,    // 砂箱餘量 %
+            });
+
+            const [env, setEnv] = useState({
+                weather: 'dry',       // dry, wet, ice
+                gradient: 0,          // 坡度 %
+                controlSystem: true,  // TC & WSP 控制系統開關
+                isRunning: false,
+            });
+
+            const stateRef = useRef(state);
+            const envRef = useRef(env);
+            stateRef.current = state;
+            envRef.current = env;
+
+            const [history, setHistory] = useState([]);
+
+            useEffect(() => {
+                let interval;
+                if (env.isRunning) {
+                    interval = setInterval(() => {
+                        const s = stateRef.current;
+                        const e = envRef.current;
+
+                        // --- 列車物理常數 ---
+                        const DT = 0.05; // 步進時間 50ms
+                        const MASS = 42000; // 單節車重 42 噸
+                        const MAX_TRACTIVE_FORCE = 80000; // 牽引力極限 (80 kN)
+                        const MAX_BRAKING_FORCE = 75000;  // 煞車制動力極限 (75 kN)
+                        
+                        // --- 1. 軌道環境基本黏著極限 (Mu) ---
+                        let baseMu = 0.33; // 乾燥
+                        if (e.weather === 'wet') baseMu = 0.15; // 濕滑
+                        if (e.weather === 'ice') baseMu = 0.06; // 極滑
+
+                        // 撒砂補償效果 (消耗沙量增加摩擦)
+                        let currentMu = baseMu;
+                        let newSandLevel = s.sandLevel;
+                        if (s.sanding && s.sandLevel > 0) {
+                            currentMu = Math.min(baseMu * 1.5, 0.42); 
+                            newSandLevel = Math.max(0, s.sandLevel - 0.4); 
+                        }
+
+                        // --- 2. 牽引力與制動力計算 (結合防打滑與 WSP 邏輯) ---
+                        let tractionForce = 0;
+                        let brakingForce = 0;
+
+                        if (s.mascon > 0) {
+                            // 【牽引模式】
+                            let effectiveTraction = s.mascon;
+                            if (e.controlSystem) {
+                               // 牽引防空轉：當車輪加速過快(空轉)，自動斬波調降電門出力
+                               if (s.slipRatio > 12) effectiveTraction *= 0.05;
+                               else if (s.slipRatio > 4) effectiveTraction *= 0.35;
+                            }
+                            tractionForce = (effectiveTraction / 100) * MAX_TRACTIVE_FORCE;
+
+                        } else if (s.mascon < 0) {
+                            // 【制動模式】
+                            let effectiveBrake = Math.abs(s.mascon);
+                            if (e.controlSystem) {
+                               // WSP 滑走保護：當偵測到車輪即將鎖死，迅速洩壓(釋放煞車)以防擦傷
+                               if (s.slipRatio < -12) effectiveBrake *= 0.05; // 完全釋放煞車讓輪速回穩
+                               else if (s.slipRatio < -4) effectiveBrake *= 0.4;
+                            }
+                            brakingForce = (effectiveBrake / 100) * MAX_BRAKING_FORCE;
+                        }
+
+                        // --- 3. 動態阻力計算 ---
+                        const rollingRes = 1800; // 基本滾動阻力
+                        const airDrag = 0.5 * 1.2 * 9.5 * (s.speed / 3.6) ** 2; // 空氣阻力
+                        const gradientForce = MASS * 9.81 * (e.gradient / 100); // 坡度阻力
+
+                        const totalResistance = rollingRes + airDrag + gradientForce;
+
+                        // --- 4. 輪軌最大能承受之黏著抓地極限 ---
+                        const maxAdhesionForce = currentMu * MASS * 9.81;
+
+                        // --- 5. 輪速與車速的解聯運算 (核心物理模型) ---
+                        let newSpeed = s.speed;
+                        let newWheelSpeed = s.wheelSpeed;
+
+                        if (tractionForce > 0) {
+                            // 【牽引狀態】
+                            if (tractionForce > maxAdhesionForce) {
+                                // 【空轉 (Slip)】：輸出力量大於摩擦極限，多餘能量使車輪暴轉
+                                const excessForce = tractionForce - maxAdhesionForce;
+                                const wheelInertia = 1800; 
+                                const wheelAccel = (excessForce / wheelInertia) * DT;
+                                newWheelSpeed = s.wheelSpeed + (wheelAccel * 3.6); // 轉速暴增
+
+                                // 火車本體僅能依據極限靜摩擦力扣除阻力來加速
+                                const netForce = maxAdhesionForce - totalResistance;
+                                const trainAccel = (netForce / MASS) * DT;
+                                newSpeed = s.speed + (trainAccel * 3.6);
+                            } else {
+                                // 【黏著良好】
+                                if (s.wheelSpeed > s.speed + 0.2) {
+                                    // 空轉後重黏著，轉速慢慢回歸車速
+                                    newWheelSpeed = s.wheelSpeed * 0.8 + s.speed * 0.2;
+                                } else {
+                                    newWheelSpeed = newSpeed;
+                                }
+                                const netForce = tractionForce - totalResistance;
+                                const trainAccel = (netForce / MASS) * DT;
+                                newSpeed = s.speed + (trainAccel * 3.6);
+                            }
+
+                        } else if (brakingForce > 0) {
+                            // 【制動狀態】
+                            if (brakingForce > maxAdhesionForce) {
+                                // 【滑走 (Slide)】：煞車力大於車輪黏著極限，車輪被鎖死不轉
+                                const excessBraking = brakingForce - maxAdhesionForce;
+                                const wheelInertia = 1800;
+                                const wheelDecel = (excessBraking / wheelInertia) * DT;
+                                newWheelSpeed = s.wheelSpeed - (wheelDecel * 3.6); // 轉速驟降
+
+                                // 火車本體滑行減速
+                                const netDecelForce = maxAdhesionForce + totalResistance;
+                                const trainDecel = (netDecelForce / MASS) * DT;
+                                newSpeed = s.speed - (trainDecel * 3.6);
+                            } else {
+                                // 【煞車黏著良好】
+                                const netDecelForce = brakingForce + totalResistance;
+                                const trainDecel = (netDecelForce / MASS) * DT;
+                                newSpeed = s.speed - (trainDecel * 3.6);
+                                newWheelSpeed = newSpeed;
+                            }
+
+                        } else {
+                            // 【惰行 N 檔狀態】
+                            const netForce = -totalResistance;
+                            const trainAccel = (netForce / MASS) * DT;
+                            newSpeed = s.speed + (trainAccel * 3.6);
+                            
+                            if (s.wheelSpeed !== s.speed) {
+                                newWheelSpeed = s.wheelSpeed * 0.8 + s.speed * 0.2;
+                            } else {
+                                newWheelSpeed = newSpeed;
+                            }
+                        }
+
+                        // 限幅保護
+                        if (newSpeed < 0) {
+                            newSpeed = 0;
+                            newWheelSpeed = 0;
+                        }
+                        if (newWheelSpeed < 0) newWheelSpeed = 0;
+
+                        // 當車輛停止時，限制滑動
+                        if (newSpeed === 0 && s.mascon <= 0) {
+                            newWheelSpeed = 0;
+                        }
+
+                        // --- 6. 蠕滑/滑走率 計算 ---
+                        let newSlip = 0;
+                        if (newSpeed > 0.1) {
+                            if (newWheelSpeed >= newSpeed) {
+                                // 牽引空轉比 (正值)
+                                newSlip = ((newWheelSpeed - newSpeed) / newWheelSpeed) * 100;
+                            } else {
+                                // 制動滑走比 (負值)
+                                newSlip = ((newWheelSpeed - newSpeed) / newSpeed) * 100;
+                            }
+                        } else if (newWheelSpeed > 0.1 && newSpeed <= 0.1) {
+                            newSlip = 100; // 靜止時車輪原地空轉
+                        }
+
+                        // 更新狀態
+                        setState(prev => ({
+                            ...prev,
+                            speed: newSpeed,
+                            wheelSpeed: newWheelSpeed,
+                            slipRatio: newSlip,
+                            distance: prev.distance + (newSpeed / 3.6) * DT,
+                            sandLevel: newSandLevel,
+                            sanding: prev.sanding && newSandLevel > 0
+                        }));
+
+                        setHistory(prev => {
+                            const newPoint = { speed: newSpeed, wheelSpeed: newWheelSpeed };
+                            const newArr = [...prev, newPoint];
+                            if (newArr.length > 100) newArr.shift();
+                            return newArr;
+                        });
+
+                    }, 50);
+                }
+                return () => clearInterval(interval);
+            }, [env.isRunning]);
+
+            return { state, setState, env, setEnv, history };
+        };
+
+        // -----------------------------------------------------------------------------
+        // Component: Main Application 
+        // -----------------------------------------------------------------------------
+        function App() {
+            const { state, setState, env, setEnv, history } = useTrainPhysics();
+            const [activeTab, setActiveTab] = useState('simulation');
+            
+            // 主控制器拖曳核心邏輯
+            const masconTrackRef = useRef(null);
+            const isDraggingRef = useRef(false);
+            const [isDragging, setIsDragging] = useState(false);
+
+            const updateEnv = (key, value) => {
+                setEnv(prev => ({ ...prev, [key]: value }));
+            };
+
+            const updateState = (key, value) => {
+                setState(prev => ({ ...prev, [key]: value }));
+            };
+
+            // 雙向手把定位，上牽引(正)、下制動(負) - 加寬軌道提高命中率
+            const handleMasconMove = (clientY) => {
+                if (!env.isRunning || !masconTrackRef.current) return;
+                
+                const rect = masconTrackRef.current.getBoundingClientRect();
+                const yFromCenter = (rect.top + rect.height / 2) - clientY;
+                
+                let value = (yFromCenter / (rect.height / 2)) * 100;
+                value = Math.max(-100, Math.min(100, value));
+                
+                // Snapping (每 10% 一個段位)
+                const snapped = Math.round(value / 10) * 10;
+                
+                setState(prev => {
+                    if (prev.mascon !== snapped) {
+                        return { ...prev, mascon: snapped };
+                    }
+                    return prev;
+                });
+            };
+
+            const onMasconDown = (e) => {
+                 if (!env.isRunning) return;
+                 isDraggingRef.current = true;
+                 setIsDragging(true);
+                 e.currentTarget.setPointerCapture(e.pointerId);
+                 handleMasconMove(e.clientY);
+            };
+
+            const onMasconMove = (e) => {
+                 if (isDraggingRef.current) {
+                    handleMasconMove(e.clientY);
+                 }
+            };
+
+            const onMasconUp = (e) => {
+                 isDraggingRef.current = false;
+                 setIsDragging(false);
+                 e.currentTarget.releasePointerCapture(e.pointerId);
+            };
+
+            const getAdhesionColor = () => {
+                const absSlip = Math.abs(state.slipRatio);
+                if (absSlip < 5) return 'text-emerald-400';
+                if (absSlip < 15) return 'text-amber-400';
+                return 'text-rose-500 animate-pulse font-extrabold';
+            };
+
+            // 獲取主控制器手把的垂直百分比定位 (用於畫手把)
+            const getMasconHandleBottom = () => {
+                const value = state.mascon; // -100 to 100
+                const percent = ((value + 100) / 200) * 100;
+                return `${percent}%`;
+            };
+
+            return (
+                <div className="min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-blue-500/30 pb-12">
+                    
+                    {/* Header */}
+                    <header className="bg-slate-900/95 border-b border-slate-800 p-4 sticky top-0 z-50 backdrop-blur-md shadow-lg">
+                        <div className="max-w-7xl mx-auto flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-3">
+                                <a href="../index.html" className="p-2 bg-slate-950 hover:bg-slate-800 border border-slate-850 rounded-xl text-slate-400 hover:text-white transition-colors" title="返回工作區">
+                                    <IconArrowLeft />
+                                </a>
+                                <div>
+                                    <h1 className="text-sm md:text-xl font-bold tracking-wider text-white flex items-center gap-1.5">
+                                        AdhesionControl<span className="text-blue-500">Pro</span>
+                                        <span className="bg-blue-500/10 text-blue-400 border border-blue-500/20 text-[8px] md:text-[9px] px-1.5 py-0.5 rounded font-mono font-bold tracking-widest">WSP SIM</span>
+                                    </h1>
+                                    <p className="text-slate-400 text-[10px] font-mono hidden sm:block">鐵路車輛黏著與制動滑走模擬系統</p>
+                                </div>
+                            </div>
+                            
+                            <nav className="flex gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800">
+                                <button 
+                                    onClick={() => setActiveTab('theory')}
+                                    className={`px-3 sm:px-5 py-1.5 rounded-lg text-xs font-bold transition-all ${activeTab === 'theory' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-white'}`}
+                                >
+                                    理論基礎
+                                </button>
+                                <button 
+                                    onClick={() => setActiveTab('simulation')}
+                                    className={`px-3 sm:px-5 py-1.5 rounded-lg text-xs font-bold transition-all ${activeTab === 'simulation' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-white'}`}
+                                >
+                                    物理模擬
+                                </button>
+                            </nav>
+
+                            <div className="flex gap-4 items-center">
+                                 <button 
+                                    onClick={() => updateEnv('isRunning', !env.isRunning)}
+                                    className={`px-4 sm:px-6 py-2 rounded-xl text-xs font-bold tracking-widest transition-all shadow-lg ${
+                                        env.isRunning 
+                                        ? 'bg-rose-600 hover:bg-rose-700 text-white shadow-rose-900/50 animate-pulse border border-rose-500/30' 
+                                        : 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-emerald-900/40 border border-emerald-400/30'
+                                    }`}
+                                 >
+                                    {env.isRunning ? 'EMG STOP' : 'START'}
+                                 </button>
+                            </div>
+                        </div>
+                    </header>
+
+                    <main className="max-w-7xl mx-auto p-3 md:p-6">
+                        
+                        {/* THEORY TAB */}
+                        {activeTab === 'theory' && (
+                            <div className="space-y-8 max-w-4xl mx-auto animate-in fade-in duration-300">
+                                <section className="bg-slate-900 p-8 rounded-2xl border border-slate-800 shadow-xl">
+                                    <h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-2">
+                                        <IconBookOpen className="w-6 h-6 text-blue-500" />
+                                        輪軌黏著與滑動機制（Slip & Slide Physics）
+                                    </h2>
+                                    <div className="space-y-4 text-slate-300 leading-relaxed text-sm">
+                                        <p>
+                                            與一般公路車輛使用橡膠輪胎行駛於粗糙瀝青路面不同，鐵路列車採用了典型的<strong className="text-white">「鋼輪鋼軌」</strong>系統。鋼輪與鋼軌之間的接觸面極小，每個軸的接觸面積僅有約一枚硬幣大小。
+                                        </p>
+                                        <p>
+                                            當列車牽引馬達輸出的旋轉力矩大於此限制時，車輪就會瞬間在鋼軌上原地打滑，即為<strong className="text-rose-400">空轉（Wheel Slip）</strong>；反之，若在煞車制動時其扭力超出軌面抓地極限，車輪會被完全鎖死停轉，但在車體慣性下依然會在鋼軌上滑行，這稱為<strong className="text-rose-400">滑走（Wheel Slide）</strong>。
+                                        </p>
+                                        <div className="bg-slate-950 p-5 rounded-xl border border-slate-800 my-6">
+                                            <h3 className="font-mono text-emerald-400 text-lg mb-2">黏著係數物理學公式</h3>
+                                            <div className="text-center font-serif text-2xl py-4 bg-slate-900/50 rounded-lg text-white font-mono border border-slate-800/50">
+                                                F = &mu;(s) &middot; W
+                                            </div>
+                                            <ul className="text-xs text-slate-400 mt-4 space-y-2 list-disc pl-4 font-mono">
+                                                <li><strong>F</strong>: 輪軌能產生的實際牽引/煞車阻抗力 (Tractive / Braking Force)</li>
+                                                <li><strong>&mu;(s)</strong>: 黏著係數 (Adhesion Coefficient) — 為一非線性函數，隨蠕滑率變動。</li>
+                                                <li><strong>W</strong>: 鋼輪施加於鋼軌的垂直軸重 (Axle Load)。</li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </section>
+
+                                <section className="bg-slate-900 p-8 rounded-2xl border border-slate-800 shadow-xl">
+                                    <h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-2">
+                                        <IconActivity className="w-6 h-6 text-blue-500" />
+                                        防空轉與防滑走系統（TC & WSP）
+                                    </h2>
+                                    <div className="grid md:grid-cols-2 gap-8 items-center text-sm">
+                                        <div className="space-y-4 text-slate-300">
+                                            <p>
+                                                <strong>防空轉控制（Traction Control）</strong>：牽引期間偵測到輪速大幅高於車速時，系統會自動切斷馬達扭力，使輪子與鋼軌重新黏著。
+                                            </p>
+                                            <p>
+                                                <strong>防滑走保護（Wheel Slide Protection / WSP）</strong>：煞車期間偵測到輪速急速下降，系統會釋放煞車氣壓（放開閘瓦），讓鋼軌重新帶動車輪旋轉，防止車輪滑走摩擦產生「擦傷（Wheel Flat / 車輪扁平）」。
+                                            </p>
+                                            <ol className="list-decimal pl-5 space-y-2 text-slate-400 font-mono text-xs">
+                                                <li><strong className="text-emerald-400">微觀蠕滑區：</strong> 蠕滑率落於 &plusmn; 10% ~ 12%，黏著力最高，此為效率最優區間。</li>
+                                                <li><strong className="text-rose-500">宏觀打滑區：</strong> 超過巔峰點後，黏著力急速崩塌。牽引時車輪原地狂轉並噴發火花；制動時車輪鎖死打滑並磨出滾滾濃煙。</li>
+                                            </ol>
+                                        </div>
+                                        <div>
+                                            <AdhesionGraph currentSlip={0} weather="wet" />
+                                        </div>
+                                    </div>
+                                </section>
+                            </div>
+                        )}
+
+                        {activeTab === 'simulation' && (
+                            <div className="grid lg:grid-cols-12 gap-4 sm:gap-6 animate-in fade-in duration-300 items-start">
+                                
+                                {/* LEFT COLUMN: Controls (4 cols) */}
+                                <div className="lg:col-span-4 space-y-4 sm:space-y-6">
+                                    
+                                    {/* Master Controller (極致手機排版優化) */}
+                                    <div className="bg-slate-900 rounded-3xl p-4 sm:p-6 border border-slate-800 shadow-2xl relative overflow-hidden group">
+                                        <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none">
+                                             <IconSettings className="w-24 h-24 text-white" />
+                                        </div>
+                                        
+                                        <div className="flex justify-between items-center mb-3">
+                                            <h2 className="text-[10px] sm:text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                                                 <IconZap className="w-4 h-4 text-blue-500 animate-pulse" /> 主控制手柄 (Mascon)
+                                            </h2>
+                                            <span className="text-[10px] sm:text-xs text-slate-500 font-mono">雙向推桿</span>
+                                        </div>
+                                        
+                                        {/* 手機上縮減為 h-48，中大螢幕為 h-80 */}
+                                        <div className="flex gap-4 sm:gap-8 h-48 sm:h-72 lg:h-80">
+                                            {/* 手機上稍微縮窄 w-16，降低畫面擁擠感 */}
+                                            <div 
+                                                ref={masconTrackRef}
+                                                onPointerDown={onMasconDown}
+                                                onPointerMove={onMasconMove}
+                                                onPointerUp={onMasconUp}
+                                                onPointerCancel={onMasconUp}
+                                                className={`relative w-16 sm:w-20 bg-slate-950 rounded-2xl border-[3px] border-slate-800 shadow-[inset_0_4px_20px_rgba(0,0,0,0.95)] mx-auto flex justify-center touch-none select-none ${
+                                                    env.isRunning ? 'cursor-ns-resize ring-2 ring-blue-500/20' : 'cursor-not-allowed opacity-50'
+                                                }`}
+                                            >
+                                                {/* Power Section */}
+                                                <div 
+                                                     className="absolute top-0 bottom-1/2 inset-x-2 bg-gradient-to-t from-transparent to-blue-500/30 rounded-t-xl transition-all duration-75"
+                                                     style={{ 
+                                                        height: state.mascon > 0 ? `${(state.mascon / 200) * 100}%` : '0px',
+                                                        bottom: '50%'
+                                                     }}
+                                                />
+                                                
+                                                {/* Brake Section */}
+                                                <div 
+                                                     className="absolute bottom-0 top-1/2 inset-x-2 bg-gradient-to-b from-transparent to-rose-600/40 rounded-b-xl transition-all duration-75"
+                                                     style={{ 
+                                                        height: state.mascon < 0 ? `${(Math.abs(state.mascon) / 200) * 100}%` : '0px',
+                                                        top: '50%'
+                                                     }}
+                                                />
+
+                                                {/* Neutral Line Splitter */}
+                                                <div className="absolute top-1/2 left-0 right-0 h-1.5 bg-yellow-500 pointer-events-none z-10 shadow-[0_0_8px_#eab308]"></div>
+                                                
+                                                {/* Notch Tick Lines */}
+                                                {[-100, -80, -60, -40, -20, 0, 20, 40, 60, 80, 100].map((notch) => (
+                                                    <div key={notch} className="absolute left-0 right-0 h-0.5 bg-slate-700/85 pointer-events-none" style={{ bottom: `${((notch + 100) / 200) * 100}%` }}>
+                                                       <span className="absolute -left-10 sm:-left-11 -top-2.5 text-[8px] sm:text-[10px] font-mono font-black text-slate-400 text-right w-8 sm:w-9">
+                                                         {notch === 100 ? 'P5' : notch === 0 ? 'N' : notch === -100 ? 'EMG' : notch > 0 ? `P${notch/20}` : `B${Math.abs(notch)/20}`}
+                                                       </span>
+                                                    </div>
+                                                ))}
+                                                
+                                                {/* 手柄本體縮小為 w-24 / h-8，並完全用百分比對齊，防止手機上溢位 */}
+                                                <div 
+                                                    className={`absolute w-24 sm:w-28 h-8 sm:h-10 rounded-lg -left-4 shadow-[0_8px_16px_rgba(0,0,0,0.6)] border-[1.5px] border-slate-500 flex flex-col items-center justify-center pointer-events-none transition-all duration-75 select-none touch-none z-20 ${
+                                                         env.isRunning 
+                                                         ? isDragging 
+                                                            ? 'bg-gradient-to-b from-white to-slate-200 ring-4 ring-blue-400 shadow-blue-500/40 scale-105' 
+                                                            : state.mascon > 0 
+                                                                ? 'bg-gradient-to-b from-blue-300 to-blue-500 text-slate-900 border-blue-400' 
+                                                                : state.mascon < 0 
+                                                                    ? 'bg-gradient-to-b from-rose-400 to-rose-600 text-white border-rose-400' 
+                                                                    : 'bg-gradient-to-b from-slate-200 to-slate-400 text-slate-900'
+                                                         : 'bg-slate-800 border-slate-900'
+                                                    }`}
+                                                    style={{ 
+                                                        bottom: getMasconHandleBottom(),
+                                                        transform: 'translateY(50%)'
+                                                    }}
+                                                >
+                                                     <div className="w-16 sm:w-20 h-1 bg-slate-950 rounded-full mb-1"></div>
+                                                     <div className="w-16 sm:w-20 h-1 bg-slate-950 rounded-full"></div>
+                                                </div>
+                                            </div>
+
+                                            {/* Stats Indicator */}
+                                            <div className="flex-1 flex flex-col justify-between py-1">
+                                                <div>
+                                                    <div className="text-slate-500 text-[9px] uppercase font-mono tracking-wider">實體手柄反饋</div>
+                                                    <div className={`text-2xl sm:text-4xl font-mono font-black ${state.mascon > 0 ? 'text-blue-400' : state.mascon < 0 ? 'text-rose-400' : 'text-slate-300'}`}>
+                                                        {state.mascon > 0 ? `P${state.mascon / 20}` : state.mascon < 0 ? `B${Math.abs(state.mascon) / 20}` : 'N'}
+                                                        <span className="text-xs sm:text-sm font-normal text-slate-500 ml-1">({state.mascon}%)</span>
+                                                    </div>
+                                                    <div className="text-[10px] sm:text-[11px] text-slate-400 mt-1 leading-normal">
+                                                        當前：{state.mascon === 0 ? '惰行 (Coasting)' : state.mascon > 0 ? '馬達牽引功率' : '電阻/氣軔制動'}
+                                                    </div>
+                                                    {isDragging && <div className="text-[10px] sm:text-[11px] text-emerald-400 mt-1 animate-pulse font-mono font-bold">手柄控制中...</div>}
+                                                </div>
+                                                
+                                                {/* Re-adhesion & WSP Toggle */}
+                                                <div className="bg-slate-950 p-2.5 rounded-2xl border border-slate-800">
+                                                     <div className="flex items-center justify-between mb-1.5">
+                                                         <span className="text-[10px] sm:text-xs text-slate-400 font-bold font-mono">TC & WSP 防滑系統</span>
+                                                         <div className={`w-2.5 h-2.5 rounded-full ${env.controlSystem ? 'bg-emerald-400 shadow-[0_0_10px_#10b981]' : 'bg-slate-800'}`}></div>
+                                                     </div>
+                                                     <button 
+                                                        onClick={() => updateEnv('controlSystem', !env.controlSystem)}
+                                                        className={`w-full py-2 text-[10px] sm:text-xs font-bold rounded-xl transition-all ${
+                                                            env.controlSystem 
+                                                            ? 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg shadow-indigo-900/30' 
+                                                            : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                                                        }`}
+                                                     >
+                                                        {env.controlSystem ? '系統完全啟用' : '無輔助手動'}
+                                                     </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Environment Controls */}
+                                    <div className="bg-slate-900 rounded-3xl p-4 sm:p-5 border border-slate-800 shadow-2xl">
+                                         <h2 className="text-[10px] sm:text-xs font-bold text-slate-400 uppercase tracking-widest mb-3.5 flex items-center gap-1.5">
+                                             <IconSliders className="w-4 h-4 text-blue-500" /> 軌道摩擦係數與線路
+                                         </h2>
+                                         
+                                         <div className="grid grid-cols-3 gap-2 mb-4">
+                                            {[
+                                                { id: 'dry', icon: IconSun, label: '乾燥軌面', color: 'text-amber-400', activeBg: 'peer-checked:border-amber-500 peer-checked:bg-amber-950/20' },
+                                                { id: 'wet', icon: IconCloudRain, label: '潮濕雨天', color: 'text-sky-400', activeBg: 'peer-checked:border-sky-500 peer-checked:bg-sky-950/20' },
+                                                { id: 'ice', icon: IconSnowflake, label: '極滑結霜', color: 'text-teal-300', activeBg: 'peer-checked:border-teal-400 peer-checked:bg-teal-950/20' }
+                                            ].map((w) => (
+                                                <label key={w.id} className="cursor-pointer relative">
+                                                    <input 
+                                                        type="radio" name="weather" value={w.id} 
+                                                        checked={env.weather === w.id}
+                                                        onChange={() => updateEnv('weather', w.id)}
+                                                        className="peer sr-only"
+                                                    />
+                                                    <div className={`flex flex-col items-center p-2 rounded-xl border border-slate-800 hover:bg-slate-800/50 transition-all ${w.activeBg}`}>
+                                                        <w.icon className={`w-4 h-4 mb-1 ${w.color}`} />
+                                                        <span className="text-[10px] font-bold text-slate-300">{w.label}</span>
+                                                    </div>
+                                                </label>
+                                            ))}
+                                         </div>
+
+                                         {/* Gradient Slider */}
+                                         <div className="mb-1">
+                                            <div className="flex justify-between items-end mb-1.5">
+                                                <label className="text-[10px] sm:text-xs font-bold text-slate-400 flex items-center gap-1">
+                                                    <IconTrendingUp className="w-3 h-3 text-emerald-500" /> 線路坡度 (Gradient)
+                                                </label>
+                                                <span className="text-xs sm:text-sm font-mono text-white font-bold">{env.gradient > 0 ? `+${env.gradient}` : env.gradient}%</span>
+                                            </div>
+                                            <input 
+                                                type="range" min="-2" max="5" step="0.5"
+                                                value={env.gradient}
+                                                onChange={(e) => updateEnv('gradient', Number(e.target.value))}
+                                                className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-500"
+                                            />
+                                            <div className="flex justify-between text-[9px] sm:text-[10px] text-slate-500 mt-1 font-mono">
+                                                <span>-2% (下坡)</span>
+                                                <span>平地 (0%)</span>
+                                                <span>+5% (陡坡)</span>
+                                            </div>
+                                         </div>
+                                    </div>
+
+                                    {/* Sander Control */}
+                                    <div className="bg-slate-900 rounded-3xl p-4 sm:p-5 border border-slate-800 shadow-2xl flex items-center gap-3">
+                                         <button
+                                            onMouseDown={() => updateState('sanding', true)}
+                                            onMouseUp={() => updateState('sanding', false)}
+                                            onMouseLeave={() => updateState('sanding', false)}
+                                            onTouchStart={() => updateState('sanding', true)}
+                                            onTouchEnd={() => updateState('sanding', false)}
+                                            disabled={state.sandLevel <= 0 || !env.isRunning}
+                                            className={`flex-1 py-3.5 rounded-2xl font-bold flex flex-col items-center justify-center transition-all ${
+                                                state.sanding 
+                                                ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 shadow-[0_0_20px_rgba(245,158,11,0.6)] scale-98' 
+                                                : 'bg-slate-800 text-slate-200 hover:bg-slate-700'
+                                            } disabled:opacity-40 disabled:cursor-not-allowed`}
+                                         >
+                                            <IconDisc className={`w-5 h-5 mb-1 ${state.sanding ? 'animate-spin' : ''}`} />
+                                            <span className="text-[10px] sm:text-xs tracking-wider font-bold">撒砂增加黏著 (SAND)</span>
+                                         </button>
+                                         <div className="w-20">
+                                            <div className="text-[8px] sm:text-[9px] text-slate-500 mb-0.5 text-center font-mono">砂箱餘量</div>
+                                            <div className="h-8 w-full bg-slate-950 rounded-lg border border-slate-800 relative overflow-hidden">
+                                                <div 
+                                                    className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-amber-600 to-amber-400 transition-all duration-300"
+                                                    style={{ height: `${state.sandLevel}%` }}
+                                                />
+                                                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent pointer-events-none" />
+                                            </div>
+                                            <div className="text-center text-[10px] sm:text-xs font-mono mt-0.5 text-amber-500 font-bold">{Math.round(state.sandLevel)}%</div>
+                                            {state.sandLevel < 100 && (
+                                                <button 
+                                                    onClick={() => updateState('sandLevel', 100)}
+                                                    className="w-full mt-1 text-[8px] sm:text-[9px] bg-slate-800 hover:bg-slate-700 text-slate-300 py-1 rounded"
+                                                >
+                                                   裝填砂箱
+                                                </button>
+                                            )}
+                                         </div>
+                                    </div>
+
+                                </div>
+
+                                {/* RIGHT COLUMN: Visuals & Data (8 cols) */}
+                                <div className="lg:col-span-8 space-y-4 sm:space-y-6">
+                                    
+                                    {/* Immersive Train Body - 手機上縮減為 h-44 */}
+                                    <div className="bg-slate-950 rounded-3xl overflow-hidden relative h-44 sm:h-60 lg:h-72 border-2 border-slate-800 shadow-2xl">
+                                         <div 
+                                            className="absolute inset-0 opacity-25 transition-colors duration-1000"
+                                            style={{
+                                                backgroundColor: env.weather === 'dry' ? '#070b19' : env.weather === 'wet' ? '#08172c' : '#111827',
+                                                backgroundImage: `
+                                                    linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
+                                                    linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px)
+                                                `,
+                                                backgroundSize: '30px 30px'
+                                            }}
+                                         >
+                                             {env.weather === 'wet' && (
+                                                 <div className="absolute inset-0 bg-repeat bg-center opacity-45 animate-[pulse_1.2s_infinite]"
+                                                      style={{ backgroundImage: 'radial-gradient(circle, #fff 1.2px, transparent 1.2px)', backgroundSize: '16px 32px' }}></div>
+                                             )}
+                                             {env.weather === 'ice' && (
+                                                 <div className="absolute inset-0 bg-gradient-to-b from-teal-500/10 to-transparent pointer-events-none" />
+                                             )}
+                                         </div>
+
+                                         {/* Moving Track */}
+                                         <div className="absolute bottom-0 w-full h-24 bg-gradient-to-b from-slate-900 to-slate-950 border-t-2 border-slate-800">
+                                             <div className="absolute -top-1 w-full h-1 bg-slate-700 opacity-60"></div>
+                                             <div 
+                                                className="h-3 bg-slate-800 w-full mt-1 opacity-95"
+                                                style={{
+                                                    backgroundImage: 'linear-gradient(90deg, #1e293b 25%, transparent 25%)',
+                                                    backgroundSize: '80px 100%',
+                                                    animation: state.speed > 0 ? `railMove ${800 / Math.max(state.speed, 1)}ms linear infinite` : 'none'
+                                                }}
+                                             />
+                                             <div className="absolute top-4 w-full h-2.5 bg-gradient-to-r from-slate-300 via-slate-100 to-slate-400 border-b border-slate-600 shadow-lg"></div>
+                                         </div>
+                                         
+                                         {/* High Accuracy Train Body */}
+                                         <div className="absolute bottom-6 left-1/2 -translate-x-1/2 w-[340px] h-[160px] z-10">
+                                              <div className="absolute top-0 w-full h-[95px] bg-gradient-to-b from-slate-800 via-slate-700 to-slate-900 rounded-2xl border-b-[6px] border-slate-950 shadow-2xl">
+                                                   <div className="absolute top-4 left-6 right-16 h-8 flex gap-3">
+                                                        <div className="w-16 h-full bg-slate-950/80 rounded-md border border-slate-600/50 flex items-center justify-center">
+                                                             <div className="w-14 h-4 bg-amber-500/10 rounded"></div>
+                                                        </div>
+                                                        <div className="w-16 h-full bg-slate-950/80 rounded-md border border-slate-600/50 flex items-center justify-center">
+                                                             <div className="w-14 h-4 bg-amber-500/10 rounded"></div>
+                                                        </div>
+                                                        <div className="w-16 h-full bg-slate-950/80 rounded-md border border-slate-600/50 flex items-center justify-center">
+                                                             <div className="w-14 h-4 bg-amber-500/10 rounded"></div>
+                                                        </div>
+                                                   </div>
+
+                                                   <div className="absolute top-3 right-2 w-14 h-10 bg-slate-950 rounded-l-full border border-slate-600/40 overflow-hidden">
+                                                        <div className="w-full h-full bg-cyan-950/30"></div>
+                                                   </div>
+
+                                                   {env.isRunning && (
+                                                       <>
+                                                           <div className="absolute bottom-4 right-1 w-3.5 h-3.5 bg-yellow-300 rounded-full shadow-[0_0_15px_#fde047] z-20"></div>
+                                                           <div 
+                                                             className="absolute bottom-0 -right-28 w-28 h-12 bg-gradient-to-r from-yellow-300/40 via-yellow-300/10 to-transparent pointer-events-none"
+                                                             style={{ clipPath: 'polygon(0 40%, 100% 0, 100% 100%, 0 60%)' }}
+                                                           />
+                                                       </>
+                                                   )}
+
+                                                   <div className="absolute top-2 left-3 w-5 h-[87px] bg-slate-900/50 border-r border-slate-950"></div>
+                                              </div>
+
+                                              {/* Bogie Frame */}
+                                              <div className="absolute bottom-4 left-10 right-10 h-6 bg-slate-900 border-2 border-slate-800 rounded-md shadow-inner flex justify-around">
+                                                   <div className="absolute -top-3 left-16 w-8 h-4 flex flex-col justify-between">
+                                                        <div className="h-1 bg-slate-600 rounded"></div>
+                                                        <div className="h-2.5 bg-gradient-to-r from-slate-400 to-slate-500 border border-slate-700 rounded-sm"></div>
+                                                   </div>
+                                                   <div className="absolute -top-3 right-16 w-8 h-4 flex flex-col justify-between">
+                                                        <div className="h-1 bg-slate-600 rounded"></div>
+                                                        <div className="h-2.5 bg-gradient-to-r from-slate-400 to-slate-500 border border-slate-700 rounded-sm"></div>
+                                                   </div>
+                                              </div>
+
+                                              {/* Wheel Set 1 */}
+                                              <div className="absolute -bottom-3 left-14 w-[54px] h-[54px] z-20">
+                                                   <div 
+                                                       className="w-full h-full rounded-full border-[6px] border-slate-400 bg-slate-950 flex items-center justify-center shadow-xl"
+                                                       style={{ 
+                                                           transform: `rotate(${(state.distance * 200) % 360}deg)`,
+                                                           transition: 'transform 50ms linear',
+                                                           animation: state.wheelSpeed > 0 && env.isRunning ? `spinWheel ${2000 / Math.max(state.wheelSpeed, 0.1)}ms linear infinite` : 'none'
+                                                       }}
+                                                   >
+                                                        <div className="w-10 h-10 rounded-full border-4 border-dashed border-slate-600 opacity-60"></div>
+                                                        <div className="absolute w-full h-1 bg-slate-800/80"></div>
+                                                        <div className="absolute w-1 h-full bg-slate-800/80"></div>
+                                                        <div className="w-4 h-4 bg-slate-600 rounded-full border border-slate-400 shadow-lg"></div>
+                                                   </div>
+                                              </div>
+
+                                              {/* Wheel Set 2 */}
+                                              <div className="absolute -bottom-3 right-14 w-[54px] h-[54px] z-20">
+                                                   <div 
+                                                       className="w-full h-full rounded-full border-[6px] border-slate-400 bg-slate-950 flex items-center justify-center shadow-xl"
+                                                       style={{ 
+                                                           transform: `rotate(${(state.distance * 200) % 360}deg)`,
+                                                           transition: 'transform 50ms linear',
+                                                           animation: state.wheelSpeed > 0 && env.isRunning ? `spinWheel ${2000 / Math.max(state.wheelSpeed, 0.1)}ms linear infinite` : 'none'
+                                                       }}
+                                                   >
+                                                        <div className="w-10 h-10 rounded-full border-4 border-dashed border-slate-600 opacity-60"></div>
+                                                        <div className="absolute w-full h-1 bg-slate-800/80"></div>
+                                                        <div className="absolute w-1 h-full bg-slate-800/80"></div>
+                                                        <div className="w-4 h-4 bg-slate-600 rounded-full border border-slate-400 shadow-lg"></div>
+                                                   </div>
+                                              </div>
+
+                                              {/* Sand Pipe */}
+                                              <div className="absolute bottom-5 left-10 w-2 h-7 bg-slate-800 border-r border-slate-950 rounded-full origin-top transform -rotate-12"></div>
+                                              {state.sanding && (
+                                                  <>
+                                                      <div className="absolute -bottom-2.5 left-10 w-4 h-[18px] bg-amber-400/30 blur-[2px] rounded-full animate-pulse" />
+                                                      <div className="absolute -bottom-3 left-9 w-6 h-1 bg-amber-500/80 blur-xs animate-bounce" />
+                                                  </>
+                                              )}
+
+                                              {/* 空轉打滑金色粒子火花 */}
+                                              {state.slipRatio > 10 && (
+                                                  <div className="absolute -bottom-3 left-14 z-30">
+                                                       <div className="w-14 h-14 bg-yellow-400/20 rounded-full blur-xl animate-ping"></div>
+                                                       <div className="absolute -left-7 top-1.5 w-2.5 h-2.5 bg-yellow-300 rounded-full animate-[pulse_0.08s_infinite] shadow-[0_0_12px_#facc15]" />
+                                                       <div className="absolute -left-4 -top-3 w-1.5 h-1.5 bg-amber-400 rounded-full animate-bounce shadow-[0_0_12px_#f59e0b]" />
+                                                       <div className="absolute -left-12 top-4.5 w-2.5 h-2.5 bg-orange-500 rounded-full animate-ping" />
+                                                       <div className="absolute -left-10 -top-4 w-1.5 h-1.5 bg-yellow-300 rounded-full animate-pulse" />
+                                                  </div>
+                                              )}
+                                              
+                                              {/* 滑走鎖死摩擦灰色白煙 */}
+                                              {state.slipRatio < -10 && (
+                                                  <div className="absolute -bottom-3 left-14 z-30 pointer-events-none">
+                                                       <div className="absolute -left-10 -top-5 w-16 h-12 bg-slate-200/50 rounded-full blur-md animate-[pulse_0.08s_infinite]" />
+                                                       <div className="absolute -left-16 -top-8 w-20 h-14 bg-slate-400/30 rounded-full blur-lg animate-ping" />
+                                                  </div>
+                                              )}
+                                         </div>
+
+                                         {/* HUD Overlay (手機上適當縮小邊距與字重) */}
+                                         <div className="absolute top-2.5 left-2.5 right-2.5 flex justify-between items-start pointer-events-none">
+                                              <div className="bg-slate-900/95 backdrop-blur-md p-2.5 rounded-2xl border border-slate-800 shadow-2xl">
+                                                  <div className="text-slate-500 text-[8px] sm:text-[10px] uppercase tracking-widest font-mono font-bold">實際車速</div>
+                                                  <div className="text-lg sm:text-2xl font-mono text-white font-black">{state.speed.toFixed(1)} <span className="text-[10px] sm:text-xs text-slate-400 font-normal">km/h</span></div>
+                                              </div>
+                                              
+                                              {state.slipRatio > 10 && (
+                                                  <div className="bg-rose-600/95 text-white px-3 sm:px-5 py-1.5 sm:py-2.5 rounded-xl sm:rounded-2xl animate-pulse text-[10px] sm:text-sm font-black shadow-2xl shadow-rose-950/75 flex items-center gap-1.5 border border-rose-400/40">
+                                                     <IconAlertTriangle className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
+                                                     WHEEL SLIP
+                                                  </div>
+                                              )}
+
+                                              {state.slipRatio < -10 && (
+                                                  <div className="bg-amber-500/95 text-slate-950 px-3 sm:px-5 py-1.5 sm:py-2.5 rounded-xl sm:rounded-2xl animate-pulse text-[10px] sm:text-sm font-black shadow-2xl shadow-amber-950/75 flex items-center gap-1.5 border border-amber-300/40">
+                                                     <IconAlertTriangle className="w-4 h-4 sm:w-5 sm:h-5 text-slate-950" />
+                                                     WHEEL SLIDE
+                                                  </div>
+                                              )}
+                                              
+                                              <div className="bg-slate-900/95 backdrop-blur-md p-2.5 rounded-2xl border border-slate-800 text-right shadow-2xl">
+                                                  <div className="text-slate-500 text-[8px] sm:text-[10px] uppercase tracking-widest font-mono font-bold">滑移率 (Slip/Slide)</div>
+                                                  <div className={`text-lg sm:text-2xl font-mono font-black ${getAdhesionColor()}`}>
+                                                    {state.slipRatio > 0 ? '+' : ''}{state.slipRatio.toFixed(1)} <span className="text-[10px] sm:text-xs font-normal">%</span>
+                                                  </div>
+                                              </div>
+                                         </div>
+                                    </div>
+                                </div>
+
+                                {/* Graphs (高清晰度示波器) */}
+                                <div className="lg:col-span-8 space-y-4 sm:space-y-6">
+                                    <div className="bg-slate-900 rounded-3xl p-1 shadow-2xl border border-slate-800 overflow-hidden md:col-span-2">
+                                        <div className="bg-slate-950 px-4 py-2.5 border-b border-slate-800 flex justify-between items-center">
+                                            <h3 className="text-slate-300 font-bold text-[10px] sm:text-xs font-mono uppercase tracking-widest flex items-center gap-2">
+                                               <IconActivity className="w-4 h-4 text-blue-500 animate-pulse" />
+                                                車速與轉速動態對比遙測 (Rolling Telemetry)
+                                            </h3>
+                                        </div>
+                                        <div className="p-3 sm:p-4">
+                                            <TimeSeriesChart dataHistory={history} />
+                                        </div>
+                                    </div>
+
+                                    <div className="grid md:grid-cols-2 gap-4 sm:gap-6">
+                                        <div className="bg-slate-900 rounded-3xl p-4 sm:p-5 border border-slate-800 shadow-2xl flex flex-col justify-between">
+                                             <div>
+                                                <h3 className="text-slate-400 font-bold text-[10px] sm:text-xs uppercase mb-2 flex items-center gap-1.5 font-mono tracking-widest">
+                                                   <IconTrendingUp className="w-4 h-4 text-emerald-500" />
+                                                   對稱式黏著控制特性曲線
+                                                </h3>
+                                                <p className="text-[11px] sm:text-xs text-slate-400 mb-3 leading-relaxed">
+                                                   右半邊為牽引加速，左半邊為煞車制動。當代表目前狀態的綠點越過左右「最佳黏著區」頂點後，黏著力就會大幅下滑，車體與車輪產生解聯打滑。
+                                                </p>
+                                             </div>
+                                             <AdhesionGraph currentSlip={state.slipRatio} weather={env.weather} />
+                                        </div>
+
+                                        <div className="bg-slate-900 rounded-3xl p-4 sm:p-5 border border-slate-800 shadow-2xl flex flex-col justify-between">
+                                            <div>
+                                                <h3 className="text-blue-400 font-bold text-[10px] sm:text-xs uppercase mb-2.5 flex items-center gap-1.5 font-mono tracking-widest">
+                                                   <IconBookOpen className="w-4 h-4" /> 
+                                                   實踐教學任務 (Mission Guidelines)
+                                                </h3>
+                                                <ul className="text-[11px] sm:text-xs text-slate-300 space-y-3 list-disc pl-4 leading-relaxed">
+                                                   <li>
+                                                        <strong className="text-white">任務一 (雨天空轉試驗)：</strong> 天氣設為「潮濕」，關閉防滑保護，手柄拉到 P5 (+100%)。
+                                                        <span className="block text-sky-400 font-mono mt-0.5 font-bold">觀察：輪速迅速飆高，車輪在濕軌上發生劇烈空轉。</span>
+                                                   </li>
+                                                   <li>
+                                                        <strong className="text-white">任務二 (結冰鎖死試驗)：</strong> 速度超 80 km/h 時，天氣設為「結冰」，關閉保護，手把拉到 EMG (-100%)。
+                                                        <span className="block text-amber-400 font-mono mt-0.5 font-bold">觀察：車輪鎖死打滑（0 km/h），但車身因慣性滑行噴煙。</span>
+                                                   </li>
+                                                   <li>
+                                                        <strong className="text-white">任務三 (防滑對比試驗)：</strong> 開啟系統 (ON) 並重現任務，觀察 TC 與 WSP 自動調控以避免空轉及擦傷。
+                                                   </li>
+                                                </ul>
+                                            </div>
+                                            <div className="mt-4 p-2.5 bg-slate-950 rounded-xl border border-slate-850/60 flex items-center gap-2.5">
+                                                 <div className="bg-blue-900/30 p-1.5 rounded-lg">
+                                                      <IconInfo className="w-4 h-4 text-blue-400" />
+                                                 </div>
+                                                 <p className="text-[9px] sm:text-[10px] text-slate-400 leading-relaxed font-mono">
+                                                     車輪滑走保護閥作動響應時間：20ms / 煞車氣壓洩壓率：90%。
+                                                 </p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                    </main>
+
+                    <style>{`
+                        @keyframes railMove {
+                            from { background-position: 0 0; }
+                            to { background-position: -80px 0; }
+                        }
+                        @keyframes spinWheel {
+                            from { transform: rotate(0deg); }
+                            to { transform: rotate(360deg); }
+                        }
+                    `}</style>
+                </div>
+            );
+        }
+
+        // 渲染 React 應用
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
