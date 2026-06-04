@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>25kV 電聯車主變壓器直流偏壓與電弧效應模擬系統</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- React & ReactDOM -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+    <!-- Babel Standalone for live JSX translation -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+        /* 隱藏數字輸入框微調按鈕 */
+        input::-webkit-outer-spin-button,
+        input::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        input[type=number] {
+            -moz-appearance: textfield;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100 min-h-screen">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo, useRef } = React;
+
+        // --- React SVG 圖標元件 (取代外部 Lucide-React 套件，保證加載速度與 100% 成功率) ---
+        const IconTrainFront = () => (
+            <svg className="w-8 h-8 text-yellow-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <rect width="16" height="16" x="4" y="2" rx="2" />
+                <path d="M4 10h16M12 2v8M8 18H5M19 18h-3M8 22l1.5-3M16 22l-1.5-3" />
+            </svg>
+        );
+
+        const IconAlertTriangle = ({ className = "w-5 h-5 text-red-500" }) => (
+            <svg className={className} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+        );
+
+        const IconZap = ({ className = "w-5 h-5" }) => (
+            <svg className={className} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg>
+        );
+
+        const IconActivity = () => (
+            <svg className="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 002 2h2a2 2 0 002-2z" />
+            </svg>
+        );
+
+        const IconVolume2 = ({ className = "w-4 h-4" }) => (
+            <svg className={className} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+            </svg>
+        );
+
+        const IconInfo = ({ className = "w-6 h-6 text-amber-600" }) => (
+            <svg className={className} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+        );
+
+        const IconBookOpen = () => (
+            <svg className="w-6 h-6 text-emerald-600" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+            </svg>
+        );
+
+        const IconChevronsRight = ({ className = "" }) => (
+            <svg className={`w-5 h-5 ${className}`} fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+                <path d="m6 17 5-5-5-5M13 17l5-5-5-5" />
+            </svg>
+        );
+
+        const IconArrowRightLeft = ({ className = "w-4 h-4" }) => (
+            <svg className={className} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+            </svg>
+        );
+
+        // --- 元件：理論說明卡片 ---
+        const ExplanationCard = ({ title, children, icon: Icon }) => (
+            <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 backdrop-blur-sm">
+                <div className="flex items-center gap-3 mb-4">
+                    <div className="p-2 bg-amber-50 dark:bg-amber-950/40 rounded-xl">
+                        <Icon className="w-6 h-6 text-amber-600 dark:text-amber-400" />
+                    </div>
+                    <h3 className="text-lg font-bold text-slate-800 dark:text-white">{title}</h3>
+                </div>
+                <div className="text-slate-600 dark:text-slate-300 leading-relaxed text-sm space-y-2">
+                    {children}
+                </div>
+            </div>
+        );
+
+        // --- 元件：狀態儀表 ---
+        const StatusGauge = ({ value, max, label, unit, icon: Icon, colorClass, alert }) => {
+            const percentage = Math.min((value / max) * 100, 100);
+            
+            return (
+                <div className={`flex flex-col items-stretch p-4 rounded-2xl border transition-all duration-300 ${alert ? 'bg-red-500/10 border-red-500/30 dark:bg-red-950/20' : 'bg-slate-100/50 border-slate-200 dark:bg-slate-800/40 dark:border-slate-800'}`}>
+                    <div className="flex items-center justify-between mb-2 text-slate-600 dark:text-slate-300 font-medium text-sm">
+                        <span className="flex items-center gap-2">
+                            <Icon className={`w-4 h-4 ${alert ? 'text-red-500 animate-pulse' : ''}`} />
+                            {label}
+                        </span>
+                        <span className="text-sm font-semibold text-slate-800 dark:text-slate-200">
+                            {value} <span className="text-xs font-normal text-slate-500">{unit}</span>
+                        </span>
+                    </div>
+                    <div className="w-full h-2.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                        <div 
+                            className={`h-full transition-all duration-300 ease-out ${colorClass}`}
+                            style={{ width: `${percentage}%` }}
+                        />
+                    </div>
+                </div>
+            );
+        };
+
+        // --- 元件：精美高流暢度 SVG 即時示波器 (取代易出錯的 Recharts) ---
+        const LiveWaveformChart = ({ dcOffsetKv, peakVoltage, isTunnelMode }) => {
+            const [time, setTime] = useState(0);
+
+            useEffect(() => {
+                const anim = setInterval(() => {
+                    setTime(t => t + 0.1);
+                }, 40);
+                return () => clearInterval(anim);
+            }, []);
+
+            // 產生 100 個波形點
+            const numPoints = 120;
+            const width = 500;
+            const height = 240;
+            const paddingX = 20;
+            const paddingY = 30;
+
+            const plotWidth = width - paddingX * 2;
+            const plotHeight = height - paddingY * 2;
+            const centerY = paddingY + plotHeight / 2;
+
+            // 交流電與偏壓計算公式
+            const maxScale = 60; // 顯示範圍 ±60kV
+
+            // 轉換電壓數值到 SVG 垂直座標 Y 軸
+            const getCoordY = (kvValue) => {
+                return centerY - (kvValue / maxScale) * (plotHeight / 2);
+            };
+
+            const actualWavePath = useMemo(() => {
+                let d = "";
+                for (let i = 0; i < numPoints; i++) {
+                    const ratio = i / (numPoints - 1);
+                    const x = paddingX + ratio * plotWidth;
+                    
+                    const angle = time + ratio * Math.PI * 4; // 顯示兩個完整波形週期
+                    const idealAc = peakVoltage * Math.sin(angle);
+                    const actualVoltage = idealAc + dcOffsetKv;
+                    
+                    const y = getCoordY(actualVoltage);
+                    if (i === 0) d += `M ${x} ${y}`;
+                    else d += ` L ${x} ${y}`;
+                }
+                return d;
+            }, [time, dcOffsetKv, peakVoltage]);
+
+            const idealWavePath = useMemo(() => {
+                let d = "";
+                for (let i = 0; i < numPoints; i++) {
+                    const ratio = i / (numPoints - 1);
+                    const x = paddingX + ratio * plotWidth;
+                    
+                    const angle = time + ratio * Math.PI * 4;
+                    const idealAc = peakVoltage * Math.sin(angle);
+                    
+                    const y = getCoordY(idealAc);
+                    if (i === 0) d += `M ${x} ${y}`;
+                    else d += ` L ${x} ${y}`;
+                }
+                return d;
+            }, [time, peakVoltage]);
+
+            return (
+                <div className="relative w-full aspect-[16/10] bg-slate-900 rounded-2xl border border-slate-800 overflow-hidden shadow-inner p-4">
+                    <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-full">
+                        {/* 網格背景 */}
+                        <line x1={paddingX} y1={getCoordY(30)} x2={width - paddingX} y2={getCoordY(30)} stroke="#1e293b" strokeWidth="1" strokeDasharray="4 4" />
+                        <line x1={paddingX} y1={getCoordY(-30)} x2={width - paddingX} y2={getCoordY(-30)} stroke="#1e293b" strokeWidth="1" strokeDasharray="4 4" />
+                        
+                        {/* 零電壓中性基準線 */}
+                        <line x1={paddingX} y1={centerY} x2={width - paddingX} y2={centerY} stroke="#475569" strokeWidth="1.5" />
+                        <text x={paddingX + 4} y={centerY - 6} fill="#64748b" className="text-[10px] font-mono">0.0 kV</text>
+                        
+                        {/* 磁飽和警示極限門檻線 (+/- 35.3kV) */}
+                        <line x1={paddingX} y1={getCoordY(35.3)} x2={width - paddingX} y2={getCoordY(35.3)} stroke="#ef4444" strokeWidth="1" strokeDasharray="2 3" opacity="0.6" />
+                        <line x1={paddingX} y1={getCoordY(-35.3)} x2={width - paddingX} y2={getCoordY(-35.3)} stroke="#ef4444" strokeWidth="1" strokeDasharray="2 3" opacity="0.6" />
+                        <text x={paddingX + 4} y={getCoordY(35.3) - 4} fill="#ef4444" className="text-[9px] font-mono" opacity="0.8">額定交流峰值 (35.35 kV)</text>
+
+                        {/* Y軸標示線與標題 */}
+                        <text x={width - paddingX - 45} y={paddingY - 10} fill="#64748b" className="text-[10px] font-mono text-right">+60 kV</text>
+                        <text x={width - paddingX - 45} y={height - paddingY + 16} fill="#64748b" className="text-[10px] font-mono text-right">-60 kV</text>
+
+                        {/* 理想正弦交流電波形 (虛線) */}
+                        <path d={idealWavePath} fill="none" stroke="#475569" strokeWidth="1.5" strokeDasharray="3 3" opacity="0.7" />
+
+                        {/* 實際受偏壓影響波形 */}
+                        <path 
+                            d={actualWavePath} 
+                            fill="none" 
+                            stroke={Math.abs(dcOffsetKv) > 3.0 ? '#ef4444' : '#10b981'} 
+                            strokeWidth="3" 
+                            className="transition-colors duration-200"
+                        />
+                    </svg>
+                </div>
+            );
+        };
+
+        // --- 主應用程式 (移除 export default 避免瀏覽器執行時報 exports is not defined 錯誤) ---
+        function App() {
+            // 系統基礎物理常數
+            const RATED_VOLTAGE_KV = 25; // 25kV 電車線額定電壓
+            const PEAK_VOLTAGE_KV = RATED_VOLTAGE_KV * Math.sqrt(2); // 交流峰值電壓 35.35kV
+            
+            // 狀態與模式控制
+            const [dcOffsetKv, setDcOffsetKv] = useState(0); // 主變壓器一次側直流偏壓
+            const [isTunnelMode, setIsTunnelMode] = useState(false); // 是否進入隧道剛性段
+            const [isArcing, setIsArcing] = useState(false); // 電弧狀態
+            const [activeTab, setActiveTab] = useState('simulation'); // 分頁狀態
+
+            // 當啟動「隧道模式」時，開啟高速集電弓機械彈跳與電弧高頻直流注入模擬
+            useEffect(() => {
+                let interval;
+                if (isTunnelMode) {
+                    interval = setInterval(() => {
+                        // 模擬剛性電車線因無彈性，高速集電弓(Loss of contact)產生微細電壓電弧
+                        const hasArcingSpike = Math.random() > 0.35;
+                        setIsArcing(hasArcingSpike);
+                        
+                        if (hasArcingSpike) {
+                            // 電弧具備非線性整流特性，通常會導致單向的直流電壓偏移 (2kV ~ 9.5kV)
+                            const polarity = Math.random() > 0.4 ? 1 : -1;
+                            const randomValue = (Math.random() * 7.5 + 2) * polarity;
+                            setDcOffsetKv(parseFloat(randomValue.toFixed(2)));
+                        } else {
+                            // 離線點閉合瞬間，電弧熄滅，直流成分快速衰減到接近 0V
+                            setDcOffsetKv(parseFloat((Math.random() * 0.4).toFixed(2)));
+                        }
+                    }, 200);
+                } else {
+                    setIsArcing(false);
+                }
+                return () => clearInterval(interval);
+            }, [isTunnelMode]);
+
+            // 計算二次側產生的危害數值
+            const transformerSaturation = Math.min(Math.abs(dcOffsetKv) * 11.5, 100); // 磁偏壓鐵芯飽和度 (%)
+            const noiseLevel = 45 + (Math.abs(dcOffsetKv) * 4.8); // 磁致伸縮引起的蜂鳴音量 (dB)
+
+            return (
+                <div className="min-h-screen bg-slate-900/5 dark:bg-slate-950 font-sans text-slate-800 dark:text-slate-100">
+                    
+                    {/* Header 導航區 */}
+                    <header className="bg-gradient-to-r from-indigo-950 to-slate-950 text-white shadow-xl sticky top-0 z-50 px-4 py-4 border-b border-slate-800">
+                        <div className="max-w-md mx-auto flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <div className="bg-blue-600/20 p-2 rounded-2xl border border-blue-500/20">
+                                    <IconTrainFront />
+                                </div>
+                                <div>
+                                    <h1 className="text-base font-bold tracking-wide">25kV電車線直流偏移模擬</h1>
+                                    <p className="text-[10px] text-indigo-300 tracking-wider">剛性電車線與集電弓電弧效應</p>
+                                </div>
+                            </div>
+                            
+                            {/* 分頁按鈕 */}
+                            <div className="flex bg-slate-900 p-0.5 rounded-xl border border-slate-800">
+                                <button 
+                                    onClick={() => setActiveTab('simulation')}
+                                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${activeTab === 'simulation' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-200'}`}
+                                >
+                                    即時模擬
+                                </button>
+                                <button 
+                                    onClick={() => setActiveTab('theory')}
+                                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${activeTab === 'theory' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-200'}`}
+                                >
+                                    技術原理
+                                </button>
+                            </div>
+                        </div>
+                    </header>
+
+                    {/* 模擬主區塊 */}
+                    <main className="max-w-md mx-auto p-4 space-y-6">
+                        
+                        {activeTab === 'simulation' && (
+                            <div className="space-y-6">
+                                
+                                {/* 波形監測器 */}
+                                <div className="bg-slate-950 p-4 rounded-3xl border border-slate-800 shadow-xl space-y-3 relative overflow-hidden">
+                                    <div className="flex justify-between items-center">
+                                        <div>
+                                            <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest">主變壓器一次側電壓 (U1)</h2>
+                                            <p className="text-[10px] text-slate-500">25kV 交流信號與整流電弧偏壓</p>
+                                        </div>
+                                        <div className={`px-2 py-0.5 rounded-full text-[10px] font-mono ${Math.abs(dcOffsetKv) > 2.0 ? 'bg-red-500/10 text-red-400 border border-red-500/20 animate-pulse' : 'bg-slate-800 text-slate-400'}`}>
+                                            DC Offset: {dcOffsetKv > 0 ? `+${dcOffsetKv}` : dcOffsetKv} kV
+                                        </div>
+                                    </div>
+
+                                    {/* 呼叫高畫質自定義 SVG 即時圖表 */}
+                                    <LiveWaveformChart 
+                                        dcOffsetKv={dcOffsetKv} 
+                                        peakVoltage={PEAK_VOLTAGE_KV} 
+                                        isTunnelMode={isTunnelMode} 
+                                    />
+                                    
+                                    <div className="flex justify-between text-[10px] text-slate-500 px-1 font-mono">
+                                        <span className="flex items-center gap-1"><span className="w-2.5 h-0.5 bg-slate-600 inline-block"></span> 理想交流波形</span>
+                                        <span className="flex items-center gap-1">
+                                            <span className={`w-2.5 h-1 inline-block ${Math.abs(dcOffsetKv) > 3 ? 'bg-red-500' : 'bg-emerald-500'}`}></span> 
+                                            現場波形 {isArcing && "(含電弧干擾)"}
+                                        </span>
+                                    </div>
+                                </div>
+
+                                {/* 行駛情境控制卡片 */}
+                                <div className="bg-white dark:bg-slate-900 p-5 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-5">
+                                    <div className="flex justify-between items-center">
+                                        <h2 className="font-bold text-sm tracking-wide text-slate-800 dark:text-slate-200">行車區段設定</h2>
+                                        {isTunnelMode && <span className="text-[10px] font-black bg-red-500 text-white px-2 py-0.5 rounded-full animate-bounce">剛性電車線區段</span>}
+                                    </div>
+
+                                    {/* 切換隧道模式 */}
+                                    <button 
+                                        onClick={() => {
+                                            setIsTunnelMode(!isTunnelMode);
+                                            if (isTunnelMode) setDcOffsetKv(0);
+                                        }}
+                                        className={`w-full p-4 rounded-2xl border-2 transition-all duration-300 flex items-center justify-between ${isTunnelMode ? 'bg-slate-950 border-slate-800 text-yellow-400 shadow-inner' : 'bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-600 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-300'}`}
+                                    >
+                                        <span className="font-bold text-sm flex items-center gap-2">
+                                            {isTunnelMode ? "正在穿越 隧道剛性段" : "行經露天段 (彈性電車線)"}
+                                        </span>
+                                        <IconChevronsRight className={isTunnelMode ? "text-yellow-400 animate-pulse" : "text-slate-400"} />
+                                    </button>
+
+                                    {/* 電弧圖示動態 */}
+                                    <div className={`p-4 rounded-2xl border transition-colors duration-150 ${isArcing ? 'bg-yellow-500/10 border-yellow-500/30 text-yellow-500' : 'bg-slate-100/50 border-transparent dark:bg-slate-800/50'}`}>
+                                        <div className="flex justify-between items-center text-xs mb-3 font-semibold">
+                                            <span>集電弓狀態</span>
+                                            {isArcing ? (
+                                                <span className="text-[10px] bg-yellow-500 text-slate-950 px-2 py-0.5 rounded-md font-bold flex items-center gap-1">
+                                                    <IconZap className="w-3.5 h-3.5" /> ARCING 電弧產生
+                                                </span>
+                                            ) : (
+                                                <span className="text-[10px] bg-emerald-500 text-white px-2 py-0.5 rounded-md font-bold">STABLE 接觸穩定</span>
+                                            )}
+                                        </div>
+                                        
+                                        {/* 集電弓物理動態示意 */}
+                                        <div className="h-16 flex items-center justify-center relative bg-slate-950 rounded-xl overflow-hidden border border-slate-800/40">
+                                            <div className="w-full h-1 bg-slate-700 absolute top-4"></div>
+                                            {isArcing && (
+                                                <div className="absolute top-3 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10">
+                                                    <IconZap className="w-8 h-8 text-yellow-400 animate-bounce" />
+                                                </div>
+                                            )}
+                                            {/* 集電弓臂 */}
+                                            <div className={`w-10 h-8 border-t-[3px] border-x-[2.5px] border-slate-400 absolute bottom-0 left-1/2 -translate-x-1/2 transition-transform duration-100 ${isArcing ? 'translate-y-2.5' : 'translate-y-0'}`}></div>
+                                        </div>
+                                    </div>
+
+                                    {/* 手動測試滑動條 (露天段限定) */}
+                                    <div className={`space-y-2 transition-all duration-300 ${isTunnelMode ? 'opacity-40 pointer-events-none' : 'opacity-100'}`}>
+                                        <div className="flex justify-between items-center text-xs">
+                                            <span className="font-semibold text-slate-600 dark:text-slate-400">手動直流偏壓注入 (測試用)</span>
+                                            <span className="font-mono font-bold text-indigo-600 dark:text-indigo-400">{dcOffsetKv} kV</span>
+                                        </div>
+                                        <input 
+                                            type="range"
+                                            min="-10"
+                                            max="10"
+                                            step="0.2"
+                                            value={dcOffsetKv}
+                                            onChange={(e) => setDcOffsetKv(parseFloat(e.target.value))}
+                                            className="w-full h-1.5 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+                                        />
+                                        <div className="flex justify-between text-[10px] text-slate-400 font-mono">
+                                            <span>-10.0 kV</span>
+                                            <span>0.0 kV (無偏壓)</span>
+                                            <span>+10.0 kV</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* 變壓器磁飽和及噪音監測儀 */}
+                                <div className="bg-white dark:bg-slate-900 p-5 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
+                                    <h3 className="font-bold text-sm text-slate-800 dark:text-slate-200 flex items-center gap-2">
+                                        <IconActivity />
+                                        主變壓器衝擊即時分析
+                                    </h3>
+                                    
+                                    <div className="space-y-3">
+                                        <StatusGauge 
+                                            value={parseFloat(transformerSaturation.toFixed(0))} 
+                                            max={100} 
+                                            label="主鐵芯磁通偏移飽和度" 
+                                            unit="%"
+                                            icon={IconArrowRightLeft}
+                                            colorClass={transformerSaturation > 80 ? 'bg-red-500' : transformerSaturation > 50 ? 'bg-amber-500' : 'bg-emerald-500'}
+                                            alert={transformerSaturation > 80}
+                                        />
+                                        <StatusGauge 
+                                            value={parseFloat(noiseLevel.toFixed(1))} 
+                                            max={120} 
+                                            label="磁致伸縮震動蜂鳴聲響" 
+                                            unit="dB"
+                                            icon={IconVolume2}
+                                            colorClass={noiseLevel > 75 ? 'bg-red-500' : 'bg-indigo-500'}
+                                            alert={noiseLevel > 75}
+                                        />
+                                    </div>
+                                    
+                                    <p className="text-[10px] text-slate-400 leading-relaxed mt-2">
+                                        * 偏壓會導致鐵芯磁通進入不對稱飽和區，產生劇烈的磁致伸縮、異常低頻蜂鳴噪音，並使得勵磁湧流暴增，危及電力牽引主斷路器(VCB)運轉。
+                                    </p>
+                                </div>
+                            </div>
+                        )}
+
+                        {activeTab === 'theory' && (
+                            <div className="space-y-6">
+                                <ExplanationCard title="為什麼剛性電車線是關鍵熱區？" icon={IconInfo}>
+                                    <p>
+                                        台鐵部分新設地下隧道段或改建淨空不足處，常用結構緊湊的<strong>「剛性電車線 (Rigid Catenary / 導電軌)」</strong>懸掛。
+                                    </p>
+                                    <p className="mt-2 text-slate-500 dark:text-slate-400 text-xs leading-relaxed">
+                                        由於剛性軌完全缺乏彈性阻尼，電聯車高速駛入時，集電弓受到高頻率的機械衝擊，極易產生高速微細「彈跳離線」 (Loss of contact)。再者，隧道內的活塞活塞效應氣流亦會推擠集電弓，令碳刷跟電車線接觸壓力失衡。
+                                    </p>
+                                </ExplanationCard>
+
+                                <ExplanationCard title="離線電弧如何轉為直流偏壓？" icon={IconZap}>
+                                    <p>
+                                        當集電弓高速彈跳時，25kV 的強大高壓會瞬間擊穿離隙空氣，進而形成極高溫度的<strong>「離合電弧 (Arcing)」</strong>。
+                                    </p>
+                                    <div className="mt-2.5 p-3 bg-slate-100 dark:bg-slate-900 rounded-xl text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                                        由於集電弓與電車線的材質完全不同（銅導線 vs. 碳刷片），加上熱力學電漿的「極性效應 (Polarity Effect)」，導致電弧放電時，正負半週之電子導電特性產生不對稱。這種非線性負載本質上形成了<strong>「整流效應 (Rectifier Effect)」</strong>，將交流電轉換為殘留之高壓直流偏移成分 (DC Offset)。
+                                    </div>
+                                </ExplanationCard>
+
+                                <ExplanationCard title="直流偏壓對 25kV 車載變壓器的危害" icon={IconAlertTriangle}>
+                                    <p>
+                                        雖然整流產生的直流偏壓（幾 kV）相較於 25kV 正弦高壓並不算大，但在物理特性上，它是<strong>主變壓器鐵芯的致命殺手</strong>：
+                                    </p>
+                                    <ul className="list-disc pl-4 mt-2 space-y-2 text-xs text-slate-500 dark:text-slate-400">
+                                        <li><strong>直流磁飽和 (DC Saturation)：</strong> 直流磁通在變壓器主鐵芯中產生單向積累，將工作點推向不對稱磁化曲線飽和區。</li>
+                                        <li><strong>激磁電流劇增 (Inrush Current)：</strong> 進入極度飽和後，鐵芯勵磁阻抗極速下降，二次側湧入額定電流十數倍的異常勵磁電流，可能使保護電驛（如 87T 比率差動電驛）誤動造成 VCB 跳開、失去動力。</li>
+                                    </ul>
+                                </ExplanationCard>
+
+                                <ExplanationCard title="工程實務上的防治對策" icon={IconBookOpen}>
+                                    <div className="space-y-3">
+                                        <div className="flex items-start gap-2 text-xs">
+                                            <span className="px-1.5 py-0.5 bg-emerald-100 text-emerald-800 font-bold rounded">機械</span>
+                                            <p className="text-slate-500 dark:text-slate-400">
+                                                於隧道口設置漸進式的「剛柔過渡懸掛」裝置，優化氣壓集電弓的動態阻尼器，減少機械接觸跳動。
+                                            </p>
+                                        </div>
+                                        <div className="flex items-start gap-2 text-xs">
+                                            <span className="px-1.5 py-0.5 bg-indigo-100 text-indigo-800 font-bold rounded">電力</span>
+                                            <p className="text-slate-500 dark:text-slate-400">
+                                                在主變壓器線圈迴路設計補償阻抗，或採用具主動「直流偏置補償 (Active DC Bias Control)」新型變頻器電路進行反向抑制。
+                                            </p>
+                                        </div>
+                                    </div>
+                                </ExplanationCard>
+                            </div>
+                        )}
+
+                    </main>
+
+                    {/* 頁尾 (保持單向頁面，無回到生活區連結) */}
+                    <footer className="text-center text-slate-500 text-xs py-8 border-t border-slate-200 dark:border-slate-800 max-w-md mx-auto px-6">
+                        <p>本教學模擬網頁僅供台鐵同仁內部學術交流使用</p>
+                        <p className="mt-1 font-mono text-[10px]">TRA High-Voltage traction System simulator</p>
+                    </footer>
+                </div>
+            );
+        }
+
+        // 渲染 React 應用
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
