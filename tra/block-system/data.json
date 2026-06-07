@@ -2,84 +2,445 @@
   "version": "動力車乘務員運轉標準作業程序第3.1版 (115.05.01)",
   "updatedAt": "2026-06-07",
   "lines": {
-    "縱貫線北段": ["七堵", "汐止", "南港", "松山", "台北", "萬華", "板橋", "樹林", "樹調"],
-    "宜蘭線": ["八堵", "暖暖", "四腳亭", "瑞芳", "猴硐", "三貂嶺", "牡丹", "雙溪", "貢寮(不派站長)", "福隆", "石城", "大里", "大溪", "龜山", "外澳", "頭城", "頂埔", "礁溪", "四城", "宜蘭", "二結", "中里", "羅東", "冬山", "新馬", "蘇澳新"],
-    "北迴線": ["蘇澳新", "永樂", "東澳", "南澳", "武塔", "漢本", "和平", "和仁", "崇德", "新城", "景美", "北埔", "花蓮"],
-    "台東線": ["花蓮", "田埔", "吉安", "志學", "平和", "壽豐", "豐田(不派站長)", "林榮新光", "南平", "鳳林", "萬榮", "光復", "大富", "富源", "瑞穗", "三民", "玉里", "東里", "東竹", "富里", "池上", "海端", "關山", "瑞和", "瑞源", "鹿野", "山里(不派站長)", "台東"],
-    "南迴線": ["台東", "康樂", "知本", "太麻里", "金崙", "瀧溪", "大武", "枋野", "枋寮"],
-    "花港線": ["北埔", "嘉新(不派副站長)", "花蓮港"]
+    "縱貫線北段": [
+      "七堵",
+      "汐止",
+      "南港",
+      "松山",
+      "台北",
+      "萬華",
+      "板橋",
+      "樹林",
+      "樹調"
+    ],
+    "宜蘭線": [
+      "八堵",
+      "暖暖",
+      "四腳亭",
+      "瑞芳",
+      "猴硐",
+      "三貂嶺",
+      "牡丹",
+      "雙溪",
+      "貢寮(不派站長)",
+      "福隆",
+      "石城",
+      "大里",
+      "大溪",
+      "龜山",
+      "外澳",
+      "頭城",
+      "頂埔",
+      "礁溪",
+      "四城",
+      "宜蘭",
+      "二結",
+      "中里",
+      "羅東",
+      "冬山",
+      "新馬",
+      "蘇澳新"
+    ],
+    "北迴線": [
+      "蘇澳新",
+      "永樂",
+      "東澳",
+      "南澳",
+      "武塔",
+      "漢本",
+      "和平",
+      "和仁",
+      "崇德",
+      "新城",
+      "景美",
+      "北埔",
+      "花蓮"
+    ],
+    "台東線": [
+      "花蓮",
+      "田埔",
+      "吉安",
+      "志學",
+      "平和",
+      "壽豐",
+      "豐田(不派站長)",
+      "林榮新光",
+      "南平",
+      "鳳林",
+      "萬榮",
+      "光復",
+      "大富",
+      "富源",
+      "瑞穗",
+      "三民",
+      "玉里",
+      "東里",
+      "東竹",
+      "富里",
+      "池上",
+      "海端",
+      "關山",
+      "瑞和",
+      "瑞源",
+      "鹿野",
+      "山里(不派站長)",
+      "台東"
+    ],
+    "南迴線": [
+      "台東",
+      "康樂",
+      "知本",
+      "太麻里",
+      "金崙",
+      "瀧溪",
+      "大武",
+      "枋野",
+      "枋寮"
+    ],
+    "花港線": [
+      "北埔",
+      "嘉新(不派副站長)",
+      "花蓮港"
+    ]
   },
   "stations": {
     "七堵": {
       "desc": "一等大站。設有複數出發與進站號誌機。",
       "signals": [
-        { "id": "up_1st_dep", "name": "上行第一出發號誌機", "type": "departure", "options": ["複線運轉", "通信式"] },
-        { "id": "up_2nd_dep", "name": "上行第二出發號誌機", "type": "departure", "options": ["通信式"] },
-        { "id": "down_1st_dep", "name": "下行第一出發號誌機", "type": "departure", "options": ["複線運轉", "通信式"] },
-        { "id": "down_2nd_dep", "name": "下行第二出發號誌機", "type": "departure", "options": ["通信式"] },
-        { "id": "up_home", "name": "上行進站號誌機", "type": "home", "options": ["就地控制新制", "常規手作"] },
-        { "id": "down_home", "name": "下行進站號誌機", "type": "home", "options": ["就地控制新制", "常規手作"] }
+        {
+          "id": "up_1st_dep",
+          "name": "上行第一出發號誌機",
+          "type": "departure",
+          "options": [
+            "複線運轉",
+            "通信式"
+          ]
+        },
+        {
+          "id": "up_2nd_dep",
+          "name": "上行第二出發號誌機",
+          "type": "departure",
+          "options": [
+            "通信式"
+          ]
+        },
+        {
+          "id": "down_1st_dep",
+          "name": "下行第一出發號誌機",
+          "type": "departure",
+          "options": [
+            "複線運轉",
+            "通信式"
+          ]
+        },
+        {
+          "id": "down_2nd_dep",
+          "name": "下行第二出發號誌機",
+          "type": "departure",
+          "options": [
+            "通信式"
+          ]
+        },
+        {
+          "id": "up_home",
+          "name": "上行進站號誌機",
+          "type": "home",
+          "options": [
+            "就地控制新制",
+            "常規手作"
+          ]
+        },
+        {
+          "id": "down_home",
+          "name": "下行進站號誌機",
+          "type": "home",
+          "options": [
+            "就地控制新制",
+            "常規手作"
+          ]
+        }
       ]
     },
     "南港": {
       "desc": "上行設有雙出發，下行設有單出發。",
       "signals": [
-        { "id": "up_1st_dep", "name": "上行第一出發號誌機", "type": "departure", "options": ["複線運轉", "通信式"] },
-        { "id": "up_2nd_dep", "name": "上行第二出發號誌機", "type": "departure", "options": ["通信式"] },
-        { "id": "down_dep", "name": "下行出發號誌機", "type": "departure", "options": ["複線運轉", "通信式"] },
-        { "id": "up_home", "name": "上行進站號誌機", "type": "home", "options": ["就地控制新制", "常規手作"] },
-        { "id": "down_home", "name": "下行進站號誌機", "type": "home", "options": ["就地控制新制", "常規手作"] }
+        {
+          "id": "up_1st_dep",
+          "name": "上行第一出發號誌機",
+          "type": "departure",
+          "options": [
+            "複線運轉",
+            "通信式"
+          ]
+        },
+        {
+          "id": "up_2nd_dep",
+          "name": "上行第二出發號誌機",
+          "type": "departure",
+          "options": [
+            "通信式"
+          ]
+        },
+        {
+          "id": "down_dep",
+          "name": "下行出發號誌機",
+          "type": "departure",
+          "options": [
+            "複線運轉",
+            "通信式"
+          ]
+        },
+        {
+          "id": "up_home",
+          "name": "上行進站號誌機",
+          "type": "home",
+          "options": [
+            "就地控制新制",
+            "常規手作"
+          ]
+        },
+        {
+          "id": "down_home",
+          "name": "下行進站號誌機",
+          "type": "home",
+          "options": [
+            "就地控制新制",
+            "常規手作"
+          ]
+        }
       ]
     },
     "台北": {
       "desc": "特等大站。具有複線運轉開關。",
       "signals": [
-        { "id": "up_dep", "name": "上行出發號誌機", "type": "departure", "options": ["複線運轉", "通信式"] },
-        { "id": "down_dep", "name": "下行出發號誌機", "type": "departure", "options": ["複線運轉", "通信式"] },
-        { "id": "up_home", "name": "上行進站號誌機", "type": "home", "options": ["常規手作"] },
-        { "id": "down_home", "name": "下行進站號誌機", "type": "home", "options": ["常規手作"] }
+        {
+          "id": "up_dep",
+          "name": "上行出發號誌機",
+          "type": "departure",
+          "options": [
+            "複線運轉",
+            "通信式"
+          ]
+        },
+        {
+          "id": "down_dep",
+          "name": "下行出發號誌機",
+          "type": "departure",
+          "options": [
+            "複線運轉",
+            "通信式"
+          ]
+        },
+        {
+          "id": "up_home",
+          "name": "上行進站號誌機",
+          "type": "home",
+          "options": [
+            "常規手作"
+          ]
+        },
+        {
+          "id": "down_home",
+          "name": "下行進站號誌機",
+          "type": "home",
+          "options": [
+            "常規手作"
+          ]
+        }
       ]
     },
     "萬華": {
       "desc": "一等大站。設有複線運轉開關。",
       "signals": [
-        { "id": "up_dep", "name": "上行出發號誌機", "type": "departure", "options": ["複線運轉", "通信式"] },
-        { "id": "down_dep", "name": "下行出發號誌機", "type": "departure", "options": ["複線運轉", "通信式"] },
-        { "id": "up_home", "name": "上行進站號誌機", "type": "home", "options": ["常規手作"] },
-        { "id": "down_home", "name": "下行進站號誌機", "type": "home", "options": ["常規手作"] }
+        {
+          "id": "up_dep",
+          "name": "上行出發號誌機",
+          "type": "departure",
+          "options": [
+            "複線運轉",
+            "通信式"
+          ]
+        },
+        {
+          "id": "down_dep",
+          "name": "下行出發號誌機",
+          "type": "departure",
+          "options": [
+            "複線運轉",
+            "通信式"
+          ]
+        },
+        {
+          "id": "up_home",
+          "name": "上行進站號誌機",
+          "type": "home",
+          "options": [
+            "常規手作"
+          ]
+        },
+        {
+          "id": "down_home",
+          "name": "下行進站號誌機",
+          "type": "home",
+          "options": [
+            "常規手作"
+          ]
+        }
       ]
     },
     "樹林": {
       "desc": "一等站。設有複線運轉開關。",
       "signals": [
-        { "id": "up_dep", "name": "上行出發號誌機", "type": "departure", "options": ["複線運轉", "通信式"] },
-        { "id": "down_dep", "name": "下行出發號誌機", "type": "departure", "options": ["複線運轉", "通信式"] },
-        { "id": "up_home", "name": "上行進站號誌機", "type": "home", "options": ["常規手作"] },
-        { "id": "down_home", "name": "下行進站號誌機", "type": "home", "options": ["常規手作"] }
+        {
+          "id": "up_dep",
+          "name": "上行出發號誌機",
+          "type": "departure",
+          "options": [
+            "複線運轉",
+            "通信式"
+          ]
+        },
+        {
+          "id": "down_dep",
+          "name": "下行出發號誌機",
+          "type": "departure",
+          "options": [
+            "複線運轉",
+            "通信式"
+          ]
+        },
+        {
+          "id": "up_home",
+          "name": "上行進站號誌機",
+          "type": "home",
+          "options": [
+            "常規手作"
+          ]
+        },
+        {
+          "id": "down_home",
+          "name": "下行進站號誌機",
+          "type": "home",
+          "options": [
+            "常規手作"
+          ]
+        }
       ]
     },
     "樹調": {
       "desc": "調車場小運轉起點。",
       "signals": [
-        { "id": "up_dep", "name": "上行出發號誌機", "type": "departure", "options": ["路牌", "嚮導"] },
-        { "id": "down_dep", "name": "下行出發號誌機", "type": "departure", "options": ["路牌", "嚮導"] },
-        { "id": "up_home", "name": "上行進站號誌機", "type": "home", "options": ["常規手作"] }
+        {
+          "id": "up_dep",
+          "name": "上行出發號誌機",
+          "type": "departure",
+          "options": [
+            "路牌",
+            "嚮導"
+          ]
+        },
+        {
+          "id": "down_dep",
+          "name": "下行出發號誌機",
+          "type": "departure",
+          "options": [
+            "路牌",
+            "嚮導"
+          ]
+        },
+        {
+          "id": "up_home",
+          "name": "上行進站號誌機",
+          "type": "home",
+          "options": [
+            "常規手作"
+          ]
+        }
       ]
     },
     "貢寮(不派站長)": {
       "desc": "不派站長簡易站。限指令式運轉。",
       "signals": [
-        { "id": "up_dep", "name": "上行出發號誌機", "type": "departure", "options": ["指令式(無人站)"] },
-        { "id": "down_dep", "name": "下行出發號誌機", "type": "departure", "options": ["指令式(無人站)"] },
-        { "id": "home", "name": "進站號誌機", "type": "home", "options": ["無人站進站"] }
+        {
+          "id": "up_dep",
+          "name": "上行出發號誌機",
+          "type": "departure",
+          "options": [
+            "指令式(無人站)"
+          ]
+        },
+        {
+          "id": "down_dep",
+          "name": "下行出發號誌機",
+          "type": "departure",
+          "options": [
+            "指令式(無人站)"
+          ]
+        },
+        {
+          "id": "home",
+          "name": "進站號誌機",
+          "type": "home",
+          "options": [
+            "無人站進站"
+          ]
+        }
       ]
     },
     "嘉新(不派副站長)": {
       "desc": "無副站長簡易站。出發與進站故障皆改指令式。",
       "signals": [
-        { "id": "up_dep", "name": "上行出發號誌機", "type": "departure", "options": ["指令式(乙簡站)"] },
-        { "id": "down_dep", "name": "下行出發號誌機", "type": "departure", "options": ["指令式(乙簡站)"] },
-        { "id": "home", "name": "進站號誌機", "type": "home", "options": ["乙簡站進站"] }
+        {
+          "id": "up_dep",
+          "name": "上行出發號誌機",
+          "type": "departure",
+          "options": [
+            "指令式(乙簡站)"
+          ]
+        },
+        {
+          "id": "down_dep",
+          "name": "下行出發號誌機",
+          "type": "departure",
+          "options": [
+            "指令式(乙簡站)"
+          ]
+        },
+        {
+          "id": "home",
+          "name": "進站號誌機",
+          "type": "home",
+          "options": [
+            "乙簡站進站"
+          ]
+        }
+      ]
+    },
+    "汐止": {
+      "desc": "",
+      "signals": [
+        {
+          "id": "sig_1780815179848",
+          "name": "上行出發",
+          "type": "departure",
+          "options": [
+            "通信式",
+            "複線運轉"
+          ]
+        }
+      ]
+    },
+    "景美": {
+      "desc": "",
+      "signals": [
+        {
+          "id": "sig_1780815216628",
+          "name": "上行出發",
+          "type": "departure",
+          "options": [
+            "指令式(無人站)"
+          ]
+        }
       ]
     }
   }
