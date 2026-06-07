@@ -1,0 +1,894 @@
+<!DOCTYPE html>
+<html lang="zh-Hant-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>台鐵變更閉塞配置管理後台</title>
+    <!-- Tailwind CSS (樣式庫) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- React & ReactDOM -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+    <!-- Babel Standalone for live JSX translation -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+        .tap-btn {
+            transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .tap-btn:active {
+            transform: scale(0.97);
+            filter: brightness(0.9);
+        }
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 font-sans min-h-screen">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        const DEFAULT_DB = {
+            version: "動力車乘務員運轉標準作業程序第3.1版 (115.05.01)",
+            updatedAt: "2026-06-07",
+            lines: {
+                "縱貫線北段": ["七堵", "汐止", "南港", "松山", "台北", "萬華", "板橋", "樹林", "樹調"],
+                "宜蘭線": ["八堵", "暖暖", "四腳亭", "瑞芳", "猴硐", "三貂嶺", "牡丹", "雙溪", "貢寮(不派站長)", "福隆", "石城", "大里", "大溪", "龜山", "外澳", "頭城", "頂埔", "礁溪", "四城", "宜蘭", "二結", "中里", "羅東", "冬山", "新馬", "蘇澳新"]
+            },
+            stations: {
+                "七堵": {
+                    "desc": "一等大站。設有複數出發號誌機。",
+                    "signals": [
+                        { "id": "up_1st_dep", "name": "上行第一出發號誌機", "type": "departure", "options": ["複線運轉", "通信式"] },
+                        { "id": "up_2nd_dep", "name": "上行第二出發號誌機", "type": "departure", "options": ["通信式"] },
+                        { "id": "down_1st_dep", "name": "下行第一出發號誌機", "type": "departure", "options": ["複線運轉", "通信式"] },
+                        { "id": "down_2nd_dep", "name": "下行第二出發號誌機", "type": "departure", "options": ["通信式"] },
+                        { "id": "up_home", "name": "上行進站號誌機", "type": "home", "options": ["就地控制新制", "常規手作"] },
+                        { "id": "down_home", "name": "下行進站號誌機", "type": "home", "options": ["就地控制新制", "常規手作"] }
+                    ]
+                },
+                "南港": {
+                    "desc": "上行設有雙出發，下行設有單出發。",
+                    "signals": [
+                        { "id": "up_1st_dep", "name": "上行第一出發號誌機", "type": "departure", "options": ["複線運轉", "通信式"] },
+                        { "id": "up_2nd_dep", "name": "上行第二出發號誌機", "type": "departure", "options": ["通信式"] },
+                        { "id": "down_dep", "name": "下行出發號誌機", "type": "departure", "options": ["複線運轉", "通信式"] },
+                        { "id": "up_home", "name": "上行進站號誌機", "type": "home", "options": ["就地控制新制", "常規手作"] },
+                        { "id": "down_home", "name": "下行進站號誌機", "type": "home", "options": ["就地控制新制", "常規手作"] }
+                    ]
+                },
+                "台北": {
+                    "desc": "特等大站。具有複線運轉開關。",
+                    "signals": [
+                        { "id": "up_dep", "name": "上行出發號誌機", "type": "departure", "options": ["複線運轉", "通信式"] },
+                        { "id": "down_dep", "name": "下行出發號誌機", "type": "departure", "options": ["複線運轉", "通信式"] },
+                        { "id": "up_home", "name": "上行進站號誌機", "type": "home", "options": ["常規手作"] },
+                        { "id": "down_home", "name": "下行進站號誌機", "type": "home", "options": ["常規手作"] }
+                    ]
+                }
+            }
+        };
+
+        const AVAILABLE_OPTIONS = [
+            "複線運轉", "通信式", "路牌", "嚮導", "嚮導通信式(單線)",
+            "指令式(無人站)", "指令式(乙簡站)", "常規手作", "就地控制新制",
+            "無人站進站", "乙簡站進站"
+        ];
+
+        /* --- 🌟 指數退避重試機制 (Exponential Backoff) 確保 AI 連線不中斷且在沙箱完美執行 --- */
+        const fetchWithRetry = async (url, options, retries = 5, delay = 1000) => {
+            try {
+                const response = await fetch(url, options);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return await response.json();
+            } catch (error) {
+                if (retries > 0) {
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                    return fetchWithRetry(url, options, retries - 1, delay * 2);
+                }
+                throw error;
+            }
+        };
+
+        function App() {
+            const [db, setDb] = useState(DEFAULT_DB);
+            const [activeLine, setActiveLine] = useState('');
+            
+            // Modal 控制
+            const [showRouteModal, setShowRouteModal] = useState(false);
+            const [newRouteName, setNewRouteName] = useState('');
+            
+            const [showStationModal, setShowStationModal] = useState(false);
+            const [editingStation, setEditingStation] = useState(null); // 'STATION_NAME' (edit) or '' (add)
+            const [stationInputName, setStationInputName] = useState(''); // Text input for name
+            const [stationDesc, setStationDesc] = useState('');
+            const [stationSignals, setStationSignals] = useState([]); 
+
+            // 🌟 Gemini AI 助理 State 欄位
+            const [aiPrompt, setAiPrompt] = useState('');
+            const [isAiLoading, setIsAiLoading] = useState(false);
+            const [aiError, setAiError] = useState('');
+
+            // 自製 React 安全防護確認對話框 State
+            const [confirmModal, setConfirmModal] = useState({
+                show: false,
+                title: '',
+                message: '',
+                onConfirm: null
+            });
+
+            // 載入外部 data.json 檔案
+            useEffect(() => {
+                fetch('data.json')
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data && data.lines && data.stations) {
+                            setDb(data);
+                            const firstLine = Object.keys(data.lines)[0];
+                            if (firstLine) setActiveLine(firstLine);
+                        }
+                    })
+                    .catch(() => {
+                        const firstLine = Object.keys(DEFAULT_DB.lines)[0];
+                        if (firstLine) setActiveLine(firstLine);
+                    });
+            }, []);
+
+            // 匯入 JSON
+            const handleJsonImport = (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    try {
+                        const importedData = JSON.parse(event.target.result);
+                        if (importedData.lines && importedData.stations) {
+                            setDb(importedData);
+                            const firstLine = Object.keys(importedData.lines)[0];
+                            if (firstLine) setActiveLine(firstLine);
+                        }
+                    } catch (err) {
+                        alert("匯入失敗，請確認是否為符合 data.json 格式之檔案。");
+                    }
+                };
+                reader.readAsText(file);
+            };
+
+            // 匯出 JSON
+            const handleJsonExport = () => {
+                const blob = new Blob([JSON.stringify(db, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'data.json';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            };
+
+            // 新增路線
+            const addRoute = () => {
+                if (!newRouteName.trim()) return;
+                if (db.lines[newRouteName]) {
+                    alert("此路線區間已存在！");
+                    return;
+                }
+                setDb(prev => ({
+                    ...prev,
+                    lines: {
+                        ...prev.lines,
+                        [newRouteName]: []
+                    }
+                }));
+                setActiveLine(newRouteName);
+                setNewRouteName('');
+                setShowRouteModal(false);
+            };
+
+            // 刪除路線
+            const deleteRoute = (lineName) => {
+                setConfirmModal({
+                    show: true,
+                    title: "確認刪除整條路線",
+                    message: `確定要刪除「${lineName}」路線區間，以及其項下所有車站數據嗎？此處置無法復原。`,
+                    onConfirm: () => {
+                        setDb(prev => {
+                            const newLines = { ...prev.lines };
+                            const lineStations = prev.lines[lineName] || [];
+                            delete newLines[lineName];
+                            
+                            const updatedStations = { ...prev.stations };
+                            lineStations.forEach(stName => {
+                                const isUsedElsewhere = Object.keys(newLines).some(lName => newLines[lName].includes(stName));
+                                if (!isUsedElsewhere) {
+                                    delete updatedStations[stName];
+                                }
+                            });
+
+                            const nextLine = Object.keys(newLines)[0] || '';
+                            setActiveLine(nextLine);
+                            return { ...prev, lines: newLines, stations: updatedStations };
+                        });
+                        setConfirmModal({ show: false, title: '', message: '', onConfirm: null });
+                    }
+                });
+            };
+
+            // 一鍵清除選定路線下的所有車站 (局部精準清空 + 共享防護垃圾回收)
+            const clearCurrentLineStations = () => {
+                if (!activeLine) return;
+                setConfirmModal({
+                    show: true,
+                    title: "🧹 清空當前路線車站",
+                    message: `確認要清空目前選定路線「${activeLine}」下的所有車站嗎？\n系統會自動交叉比對，若清空的車站並未被其他路線引用，才會將其號誌配置在資料庫中抹除，確保共享車站數據不遺失！`,
+                    onConfirm: () => {
+                        setDb(prev => {
+                            const currentStations = prev.lines[activeLine] || [];
+                            const updatedLines = {
+                                ...prev.lines,
+                                [activeLine]: []
+                            };
+
+                            const updatedStations = { ...prev.stations };
+                            currentStations.forEach(stName => {
+                                const usedElsewhere = Object.keys(updatedLines).some(lName => updatedLines[lName].includes(stName));
+                                if (!usedElsewhere) {
+                                    delete updatedStations[stName];
+                                }
+                            });
+
+                            return {
+                                ...prev,
+                                lines: updatedLines,
+                                stations: updatedStations
+                            };
+                        });
+                        setConfirmModal({ show: false, title: '', message: '', onConfirm: null });
+                    }
+                });
+            };
+
+            // 🌟 呼叫 Gemini API 智慧分析號誌對策 (符合 Structured JSON Output)
+            const handleAiGenerate = async () => {
+                if (!aiPrompt.trim()) return;
+                setIsAiLoading(true);
+                setAiError('');
+
+                const systemPrompt = `你是一位精通台灣鐵路運轉規章與動力車乘務員運轉標準作業程序（特別是號誌故障與變更閉塞處置）的 AI 智慧專家。
+你的任務是讀取使用者描述的車站號誌故障處理或現場軌道對不對稱實務狀況，自動推薦與生成最適用的號誌槽配置清單。
+你必須輸出一個符合以下 JSON 格式的物件。不要輸出任何 Markdown 或說明文字，只輸出乾淨的 JSON：
+{
+  "desc": "此車站的簡短運轉情況備註描述（例如：設有複數出發號誌，地下化區間，設有複線運轉開關。）",
+  "signals": [
+    {
+      "id": "英數字唯一標識，例如 up_1st_dep, down_dep, up_home",
+      "name": "號誌機的精確名稱，例如：上行第一出發號誌機、下行出發號誌機、上行進站號誌機",
+      "type": "departure" 或 "home" （注意：只能是這兩個英文類型字串之一）,
+      "options": ["規章處置選項陣列"]
+    }
+  ]
+}
+
+可用的 options 必須且只能來自以下清單中符合最新規章（第3.1版）的項目：
+${JSON.stringify(AVAILABLE_OPTIONS)}
+
+請嚴密校對。若為大站設有複線運轉開關，出發號誌故障在 options 中通常同時提供 ["複線運轉", "通信式"]。單線區間只提供 ["通信式"] 或 ["嚮導通信式(單線)"] 等。進站若為就地控制站，則 options 為 ["就地控制新制", "常規手作"]。`;
+
+                const payload = {
+                    contents: [
+                        { parts: [{ text: `請分析以下台鐵車站狀況並自動生成號誌槽與對策：\n"${aiPrompt}"` }] }
+                    ],
+                    systemInstruction: {
+                        parts: [{ text: systemPrompt }]
+                    },
+                    generationConfig: {
+                        responseMimeType: "application/json",
+                        responseSchema: {
+                            type: "OBJECT",
+                            properties: {
+                                desc: { type: "STRING" },
+                                signals: {
+                                    type: "ARRAY",
+                                    items: {
+                                        type: "OBJECT",
+                                        properties: {
+                                            id: { type: "STRING" },
+                                            name: { type: "STRING" },
+                                            type: { type: "STRING", enum: ["departure", "home"] },
+                                            options: {
+                                                type: "ARRAY",
+                                                items: { type: "STRING" }
+                                            }
+                                        },
+                                        required: ["id", "name", "type", "options"]
+                                    }
+                                }
+                            },
+                            required: ["desc", "signals"]
+                        }
+                    }
+                };
+
+                const apiKey = ""; // Runtime automatically injected by the playground environment
+                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+
+                try {
+                    const responseData = await fetchWithRetry(url, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    const rawText = responseData.candidates?.[0]?.content?.parts?.[0]?.text;
+                    if (!rawText) throw new Error("API 未傳回有效回覆。");
+
+                    const parsed = JSON.parse(rawText);
+                    if (parsed.signals) {
+                        setStationSignals(parsed.signals);
+                    }
+                    if (parsed.desc) {
+                        setStationDesc(parsed.desc);
+                    }
+                    setAiPrompt('');
+                } catch (err) {
+                    setAiError("❌ AI 生成失敗，請確認網路連線或稍後重試。");
+                } finally {
+                    setIsAiLoading(false);
+                }
+            };
+
+            // 打開車站編輯/新增 Modal (全面剔除 prompt, 改在 UI 完成)
+            const openStationEditor = (stationName = '') => {
+                setAiPrompt('');
+                setAiError('');
+                if (stationName) {
+                    setEditingStation(stationName);
+                    setStationInputName(stationName);
+                    const meta = db.stations[stationName] || { desc: '', signals: [] };
+                    setStationDesc(meta.desc || '');
+                    setStationSignals(meta.signals ? JSON.parse(JSON.stringify(meta.signals)) : []);
+                } else {
+                    setEditingStation('');
+                    setStationInputName('');
+                    setStationDesc('');
+                    setStationSignals([
+                        { "id": "up_dep", "name": "上行出發號誌機", "type": "departure", "options": ["通信式"] },
+                        { "id": "down_dep", "name": "下行出發號誌機", "type": "departure", "options": ["通信式"] },
+                        { "id": "home", "name": "進站號誌機", "type": "home", "options": ["常規手作"] }
+                    ]);
+                }
+                setShowStationModal(true);
+            };
+
+            // 儲存車站自訂號誌槽配置
+            const saveStationConfig = () => {
+                const finalStationName = stationInputName.trim();
+                if (!finalStationName) {
+                    alert("請輸入車站名稱！");
+                    return;
+                }
+
+                if (!editingStation && db.lines[activeLine].includes(finalStationName)) {
+                    alert("該線路已有此同名車站！");
+                    return;
+                }
+
+                setDb(prev => {
+                    let updatedLineStations = [...prev.lines[activeLine]];
+                    
+                    if (editingStation) {
+                        if (editingStation !== finalStationName) {
+                            updatedLineStations = updatedLineStations.map(s => s === editingStation ? finalStationName : s);
+                        }
+                    } else {
+                        updatedLineStations.push(finalStationName);
+                    }
+
+                    const updatedStations = { ...prev.stations };
+                    
+                    if (editingStation && editingStation !== finalStationName) {
+                        const isShared = Object.keys(prev.lines).some(lName => lName !== activeLine && prev.lines[lName].includes(editingStation));
+                        if (!isShared) {
+                            delete updatedStations[editingStation];
+                        }
+                    }
+
+                    updatedStations[finalStationName] = {
+                        desc: stationDesc,
+                        signals: stationSignals
+                    };
+
+                    return {
+                        ...prev,
+                        lines: {
+                            ...prev.lines,
+                            [activeLine]: updatedLineStations
+                        },
+                        stations: updatedStations
+                    };
+                });
+
+                setShowStationModal(false);
+                setEditingStation(null);
+            };
+
+            // 刪除車站
+            const deleteStation = (stationName) => {
+                setConfirmModal({
+                    show: true,
+                    title: "確認移除車站",
+                    message: `確定要將「${stationName}」車站從「${activeLine}」路線中完全移除嗎？`,
+                    onConfirm: () => {
+                        setDb(prev => {
+                            const updatedLineStations = prev.lines[activeLine].filter(s => s !== stationName);
+                            const updatedLines = {
+                                ...prev.lines,
+                                [activeLine]: updatedLineStations
+                            };
+
+                            const updatedStations = { ...prev.stations };
+                            const isShared = Object.keys(updatedLines).some(lName => updatedLines[lName].includes(stationName));
+                            if (!isShared) {
+                                delete updatedStations[stationName];
+                            }
+
+                            return {
+                                ...prev,
+                                lines: updatedLines,
+                                stations: updatedStations
+                            };
+                        });
+                        setConfirmModal({ show: false, title: '', message: '', onConfirm: null });
+                    }
+                });
+            };
+
+            // 上下移動車站順序
+            const moveStation = (index, direction) => {
+                const lineStations = [...db.lines[activeLine]];
+                const targetIndex = index + direction;
+                
+                if (targetIndex < 0 || targetIndex >= lineStations.length) return;
+                
+                const temp = lineStations[index];
+                lineStations[index] = lineStations[targetIndex];
+                lineStations[targetIndex] = temp;
+                
+                setDb(prev => ({
+                    ...prev,
+                    lines: {
+                        ...prev.lines,
+                        [activeLine]: lineStations
+                    }
+                }));
+            };
+
+            // 增加號誌槽
+            const addNewSignalSlot = () => {
+                const newId = `sig_${Date.now()}`;
+                setStationSignals(prev => [
+                    ...prev,
+                    { id: newId, name: "新設號誌機", type: "departure", options: ["通信式"] }
+                ]);
+            };
+
+            // 移除特定號誌槽
+            const removeSignalSlot = (id) => {
+                setStationSignals(prev => prev.filter(s => s.id !== id));
+            };
+
+            // 變更號誌槽欄位
+            const updateSignalField = (id, field, value) => {
+                setStationSignals(prev => prev.map(s => {
+                    if (s.id === id) {
+                        return { ...s, [field]: value };
+                    }
+                    return s;
+                }));
+            };
+
+            // 勾選/取勾選號誌的適用規章選項
+            const toggleOptionCheckbox = (signalId, optionName) => {
+                setStationSignals(prev => prev.map(s => {
+                    if (s.id === signalId) {
+                        const currentOpts = s.options || [];
+                        const nextOpts = currentOpts.includes(optionName)
+                            ? currentOpts.filter(o => o !== optionName)
+                            : [...currentOpts, optionName];
+                        return { ...s, options: nextOpts };
+                    }
+                    return s;
+                }));
+            };
+
+            return (
+                <div className="max-w-md mx-auto min-h-screen flex flex-col bg-slate-900/40 border-x border-slate-800">
+                    
+                    {/* Header */}
+                    <header className="bg-slate-900 p-4 border-b border-slate-800 flex justify-between items-center">
+                        <div className="flex items-center space-x-2">
+                            <span className="text-lg">⚙️</span>
+                            <div>
+                                <h1 className="text-sm font-bold text-white">規章配置管理後台</h1>
+                                <p className="text-[9px] text-slate-400 font-mono">TRA Block Config Generator</p>
+                            </div>
+                        </div>
+                        <a href="./index.html" className="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 py-1.5 px-3 rounded-lg border border-slate-700">
+                            返回查詢端
+                        </a>
+                    </header>
+
+                    <div className="p-4 space-y-5 flex-1">
+                        
+                        {/* 系統基本規章版本設定 */}
+                        <div className="bg-slate-950/80 p-4 rounded-2xl border border-slate-850 space-y-3">
+                            <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest">系統規章版本與校對</h2>
+                            <div className="space-y-2.5">
+                                <div>
+                                    <label className="text-[10px] text-slate-500 font-mono block mb-1">對應規章版本名稱</label>
+                                    <input 
+                                        type="text" 
+                                        value={db.version}
+                                        onChange={(e) => setDb(prev => ({ ...prev, version: e.target.value }))}
+                                        className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="text-[10px] text-slate-500 font-mono block mb-1">資料最後校對日期</label>
+                                    <input 
+                                        type="date" 
+                                        value={db.updatedAt}
+                                        onChange={(e) => setDb(prev => ({ ...prev, updatedAt: e.target.value }))}
+                                        className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* 路線分區管理 */}
+                        <div className="bg-slate-950/80 p-4 rounded-2xl border border-slate-850 space-y-3">
+                            <div className="flex justify-between items-center">
+                                <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest">第一步：行車線路管理</h2>
+                                <button 
+                                    onClick={() => setShowRouteModal(true)}
+                                    className="bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-bold px-2.5 py-1.5 rounded-lg tap-btn"
+                                >
+                                    + 新增線路
+                                </button>
+                            </div>
+                            
+                            <div className="flex gap-1.5 overflow-x-auto pb-1.5 no-scrollbar">
+                                {Object.keys(db.lines).map(line => (
+                                    <button
+                                        key={line}
+                                        onClick={() => setActiveLine(line)}
+                                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap border ${activeLine === line ? 'bg-blue-600 text-white border-blue-500 shadow-md' : 'bg-slate-900 text-slate-400 border-slate-850 hover:text-slate-200'}`}
+                                    >
+                                        {line}
+                                    </button>
+                                ))}
+                            </div>
+
+                            {activeLine && (
+                                <div className="flex justify-between items-center bg-slate-900/60 p-2 rounded-xl border border-slate-850 text-xs">
+                                    <span className="text-slate-400">目前選定線路: <strong className="text-white">{activeLine}</strong></span>
+                                    <button 
+                                        onClick={() => deleteRoute(activeLine)}
+                                        className="text-[10px] bg-red-950/30 text-red-400 border border-red-900/40 px-2.5 py-1 rounded-md hover:bg-red-950/60 transition-colors tap-btn"
+                                    >
+                                        刪除此線路
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* 車站名冊與個別號誌設定 */}
+                        {activeLine && (
+                            <div className="bg-slate-950/80 p-4 rounded-2xl border border-slate-850 space-y-3 animate-in fade-in duration-200">
+                                <div className="flex justify-between items-center">
+                                    <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest font-sans">第二步：轄區車站與自訂號誌 ({activeLine})</h2>
+                                    <button 
+                                        onClick={() => openStationEditor('')}
+                                        className="bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold px-2.5 py-1.5 rounded-lg tap-btn"
+                                    >
+                                        + 新增車站
+                                    </button>
+                                </div>
+
+                                <div className="space-y-2 max-h-96 overflow-y-auto no-scrollbar">
+                                    {db.lines[activeLine] && db.lines[activeLine].map((station, index) => {
+                                        const statMeta = db.stations[station] || { desc: '', signals: [] };
+                                        return (
+                                            <div key={station} className="bg-slate-900/80 p-3 rounded-xl border border-slate-850/60 flex items-center justify-between">
+                                                <div className="flex-1 pr-2 cursor-pointer" onClick={() => openStationEditor(station)}>
+                                                    <div className="flex items-center space-x-2">
+                                                        <span className="font-bold text-xs text-white underline decoration-slate-600 underline-offset-4">{station}</span>
+                                                        <span className="text-[8px] px-1.5 py-0.5 rounded font-black font-mono border bg-slate-800 text-slate-400 border-slate-700">
+                                                            {statMeta.signals ? statMeta.signals.length : 0} 具號誌槽
+                                                        </span>
+                                                    </div>
+                                                    <p className="text-[9px] text-slate-500 mt-1 max-w-[200px] truncate">{statMeta.desc || '暫無車站描述。點選進行編輯號誌。'}</p>
+                                                </div>
+                                                
+                                                {/* 上下移動與刪除控制區 */}
+                                                <div className="flex items-center space-x-1 flex-shrink-0">
+                                                    <button
+                                                        onClick={() => moveStation(index, -1)}
+                                                        disabled={index === 0}
+                                                        className={`p-1.5 bg-slate-950 border border-slate-800 rounded-lg text-xs tap-btn ${index === 0 ? 'opacity-30 cursor-not-allowed text-slate-600' : 'text-emerald-400 hover:bg-slate-800'}`}
+                                                        title="向上移動"
+                                                    >
+                                                        🔺
+                                                    </button>
+                                                    <button
+                                                        onClick={() => moveStation(index, 1)}
+                                                        disabled={index === db.lines[activeLine].length - 1}
+                                                        className={`p-1.5 bg-slate-950 border border-slate-800 rounded-lg text-xs tap-btn ${index === db.lines[activeLine].length - 1 ? 'opacity-30 cursor-not-allowed text-slate-600' : 'text-emerald-400 hover:bg-slate-800'}`}
+                                                        title="向下移動"
+                                                    >
+                                                        🔻
+                                                    </button>
+                                                    <button 
+                                                        onClick={() => deleteStation(station)}
+                                                        className="tap-btn p-1.5 bg-slate-950 border border-slate-800 rounded-lg text-slate-500 hover:text-red-400"
+                                                        title="刪除車站"
+                                                    >
+                                                        ❌
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+
+                                {/* 一鍵清空當前線路 */}
+                                {db.lines[activeLine] && db.lines[activeLine].length > 0 && (
+                                    <div className="pt-2">
+                                        <button
+                                            onClick={clearCurrentLineStations}
+                                            className="w-full py-2 bg-red-950/20 hover:bg-red-950/40 text-red-400 border border-red-900/30 text-xs font-bold rounded-xl tap-btn transition-colors"
+                                        >
+                                            🧹 一鍵清空目前路線下的車站
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {/* 匯入與匯出資料庫 */}
+                        <div className="bg-slate-950/80 p-4 rounded-2xl border border-slate-850 space-y-3">
+                            <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest">第三步：保存、備份與移交</h2>
+                            <p className="text-[10px] text-slate-500 leading-normal">
+                                修改完畢後，點擊匯出下載並將其檔案重新命名為 **data.json** 上傳覆蓋 GITHUB，即可全台即時同步。
+                            </p>
+                            <div className="flex gap-2">
+                                <button 
+                                    onClick={handleJsonExport}
+                                    className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-xl text-xs tap-btn shadow-md"
+                                >
+                                    📥 匯出並下載 data.json
+                                </button>
+                                <label className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-2.5 rounded-xl text-xs tap-btn text-center border border-slate-700 cursor-pointer">
+                                    📤 匯入舊的 data.json
+                                    <input type="file" accept=".json" onChange={handleJsonImport} className="hidden" />
+                                </label>
+                            </div>
+                        </div>
+
+                    </div>
+
+                    {/* MODAL: 新增線路 */}
+                    {showRouteModal && (
+                        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                            <div className="bg-slate-900 border border-slate-800 w-full max-w-xs rounded-2xl p-5 space-y-4 shadow-2xl animate-in fade-in zoom-in-95 duration-150">
+                                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">新增路線區間</h3>
+                                <input 
+                                    type="text" 
+                                    placeholder="例如：支線-內灣線"
+                                    value={newRouteName}
+                                    onChange={(e) => setNewRouteName(e.target.value)}
+                                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500"
+                                />
+                                <div className="flex gap-2 text-xs">
+                                    <button onClick={addRoute} className="flex-1 bg-blue-600 text-white py-2 rounded-xl font-bold tap-btn">確認新增</button>
+                                    <button onClick={() => setShowRouteModal(false)} className="flex-1 bg-slate-800 text-slate-400 py-2 rounded-xl font-bold tap-btn">取消</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* 🌟 MODAL: 車站多重號誌槽與對策配置控制台 (100% 繞過 Prompt，深度融合 Gemini AI 生成能力) */}
+                    {showStationModal && (
+                        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+                            <div className="bg-slate-900 border border-slate-800 w-full max-w-sm rounded-2xl p-5 space-y-4 shadow-2xl my-8">
+                                <div className="flex justify-between items-center border-b border-slate-800 pb-2">
+                                    <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+                                        {editingStation ? `編輯「${editingStation}」號誌配置` : `自訂新車站與號誌對策`}
+                                    </h3>
+                                    <button 
+                                        onClick={addNewSignalSlot}
+                                        className="bg-blue-600 hover:bg-blue-700 text-white text-[9px] px-2 py-1 rounded font-bold"
+                                    >
+                                        + 增加號誌槽
+                                    </button>
+                                </div>
+                                
+                                <div className="space-y-4 max-h-[380px] overflow-y-auto pr-1 no-scrollbar text-xs">
+                                    
+                                    {/* 🌟 核心增修：✨ AI 智慧號誌與對策解析生成區塊 */}
+                                    <div className="bg-blue-950/40 p-3 rounded-xl border border-blue-800/40 space-y-2">
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-[10px] font-bold text-blue-400 flex items-center gap-1.5">
+                                                ✨ AI 智慧號誌生成助理
+                                            </span>
+                                            {isAiLoading && (
+                                                <span className="text-[9px] text-blue-400 animate-pulse">正在精準對齊 3.1 版規章...</span>
+                                            )}
+                                        </div>
+                                        <textarea
+                                            placeholder="請用自然語言描述，例如：『南港站上行雙出發。第一出發故障可用複線運轉、通信式。第二出發故障只能通信式。下行出發故障可複線或通信式。進站是就地控制站。』"
+                                            value={aiPrompt}
+                                            onChange={(e) => setAiPrompt(e.target.value)}
+                                            rows={3}
+                                            className="w-full bg-slate-950 border border-slate-850 rounded-lg p-2 text-[10px] text-slate-200 placeholder-slate-600 focus:outline-none focus:border-blue-500/80 leading-normal"
+                                        />
+                                        <button
+                                            onClick={handleAiGenerate}
+                                            disabled={isAiLoading || !aiPrompt.trim()}
+                                            className={`w-full py-1.5 rounded-xl text-[10px] font-bold tap-btn transition-all ${isAiLoading || !aiPrompt.trim() ? 'bg-slate-800 text-slate-500 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-500/10'}`}
+                                        >
+                                            {isAiLoading ? '⏳ AI 正在校對分析規章...' : '✨ 依描述自動產生號誌與對策'}
+                                        </button>
+                                        {aiError && (
+                                            <div className="text-[9px] text-red-400 mt-1 font-mono">{aiError}</div>
+                                        )}
+                                    </div>
+
+                                    <div>
+                                        <label className="text-[10px] text-slate-500 font-mono block mb-1">車站名稱</label>
+                                        <input 
+                                            type="text" 
+                                            placeholder="例如：南港"
+                                            value={stationInputName}
+                                            onChange={(e) => setStationInputName(e.target.value)}
+                                            disabled={!!editingStation}
+                                            className={`w-full border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none ${editingStation ? 'bg-slate-950/40 text-slate-400 cursor-not-allowed' : 'bg-slate-950'}`}
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="text-[10px] text-slate-500 font-mono block mb-1">車站描述備註</label>
+                                        <input 
+                                            type="text" 
+                                            placeholder="例如：一等站。雙軌/單線交界點。"
+                                            value={stationDesc}
+                                            onChange={(e) => setStationDesc(e.target.value)}
+                                            className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none"
+                                        />
+                                    </div>
+
+                                    {/* 號誌槽列表自訂編輯 */}
+                                    <div className="space-y-4">
+                                        {stationSignals.map((sig, sigIdx) => (
+                                            <div key={sig.id} className="p-3 bg-slate-950 rounded-2xl border border-slate-850 space-y-3 relative">
+                                                <button
+                                                    onClick={() => removeSignalSlot(sig.id)}
+                                                    className="absolute top-2.5 right-2.5 text-xs text-slate-600 hover:text-red-400 tap-btn"
+                                                    title="移除此號誌機"
+                                                >
+                                                    ❌
+                                                </button>
+
+                                                <div className="grid grid-cols-2 gap-2">
+                                                    <div>
+                                                        <label className="text-[9px] text-slate-500 font-mono block mb-1">號誌機名稱</label>
+                                                        <input 
+                                                            type="text"
+                                                            value={sig.name}
+                                                            onChange={(e) => updateSignalField(sig.id, 'name', e.target.value)}
+                                                            className="w-full bg-slate-900 border border-slate-800 rounded-lg p-1 text-[11px] text-white"
+                                                        />
+                                                    </div>
+                                                    <div>
+                                                        <label className="text-[9px] text-slate-500 font-mono block mb-1">故障類型類別</label>
+                                                        <select 
+                                                            value={sig.type}
+                                                            onChange={(e) => updateSignalField(sig.id, 'type', e.target.value)}
+                                                            className="w-full bg-slate-900 border border-slate-800 rounded-lg p-1 text-[11px] text-white"
+                                                        >
+                                                            <option value="departure">出發號誌故障</option>
+                                                            <option value="home">進站號誌故障</option>
+                                                        </select>
+                                                    </div>
+                                                </div>
+
+                                                {/* 規章適用對策多重勾選清單 */}
+                                                <div>
+                                                    <label className="text-[9px] text-slate-500 font-mono block mb-1.5">
+                                                        勾選此號誌適用之閉塞/處置 (可複選，將呈供司機員選擇)
+                                                    </label>
+                                                    <div className="grid grid-cols-2 gap-1.5 bg-slate-900 p-2 rounded-xl border border-slate-800/80">
+                                                        {AVAILABLE_OPTIONS.map(opt => {
+                                                            const isChecked = sig.options && sig.options.includes(opt);
+                                                            return (
+                                                                <label key={opt} className="flex items-center space-x-1.5 text-[10px] text-slate-300 cursor-pointer select-none">
+                                                                    <input 
+                                                                        type="checkbox"
+                                                                        checked={isChecked}
+                                                                        onChange={() => toggleOptionCheckbox(sig.id, opt)}
+                                                                        className="w-3.5 h-3.5 accent-blue-500 rounded"
+                                                                    />
+                                                                    <span>{opt}</span>
+                                                                </label>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                <div className="flex gap-2 text-xs pt-1">
+                                    <button onClick={saveStationConfig} className="flex-1 bg-blue-600 text-white py-2.5 rounded-xl font-bold tap-btn">確認儲存</button>
+                                    <button onClick={() => setShowStationModal(false)} className="flex-1 bg-slate-800 text-slate-400 py-2.5 rounded-xl font-bold tap-btn">取消</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* 自製安全防誤觸確認 Modal */}
+                    {confirmModal.show && (
+                        <div className="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                            <div className="bg-slate-900 border border-red-500/30 w-full max-w-xs rounded-2xl p-5 space-y-4 shadow-2xl animate-in fade-in zoom-in-95 duration-150">
+                                <div className="flex items-center space-x-2 text-red-400">
+                                    <span className="text-lg">⚠️</span>
+                                    <h3 className="text-sm font-black uppercase tracking-widest">{confirmModal.title}</h3>
+                                </div>
+                                <p className="text-xs text-slate-300 leading-relaxed font-mono">
+                                    {confirmModal.message}
+                                </p>
+                                <div className="flex gap-2 text-xs">
+                                    <button 
+                                        onClick={() => {
+                                            if (confirmModal.onConfirm) confirmModal.onConfirm();
+                                        }} 
+                                        className="flex-1 bg-red-600 hover:bg-red-700 text-white py-2.5 rounded-xl font-bold tap-btn"
+                                    >
+                                        確認
+                                    </button>
+                                    <button 
+                                        onClick={() => setConfirmModal({ show: false, title: '', message: '', onConfirm: null })} 
+                                        className="flex-1 bg-slate-800 text-slate-300 py-2.5 rounded-xl font-bold tap-btn"
+                                    >
+                                        取消
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* 頁尾 */}
+                    <footer className="text-center text-slate-500 text-[10px] py-6 border-t border-slate-900 max-w-md mx-auto">
+                        <p>台鐵行車規章視覺化管理配置系統</p>
+                        <p className="mt-1 font-mono uppercase">TRA Block Change Operating Configurator</p>
+                    </footer>
+
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
