@@ -26,6 +26,22 @@
             -ms-overflow-style: none;
             scrollbar-width: none;
         }
+        @keyframes pulse-ring {
+            0% { transform: scale(0.7); opacity: 0; }
+            50% { opacity: 0.9; }
+            100% { transform: scale(1.4); opacity: 0; }
+        }
+        .pulsing-dot {
+            position: relative;
+        }
+        .pulsing-dot::before {
+            content: '';
+            position: absolute;
+            top: -6px; left: -6px; right: -6px; bottom: -6px;
+            border: 2px solid #ef4444;
+            border-radius: 50%;
+            animation: pulse-ring 1.5s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+        }
     </style>
 </head>
 <body class="bg-slate-950 text-slate-100 font-sans min-h-screen">
@@ -34,10 +50,20 @@
     <script type="text/babel">
         const { useState, useEffect, useMemo } = React;
 
-        /* --- 備置內建資料庫：保證離線與本地雙擊 100% 可用且資訊最新 --- */
+        /* --- 備置內建資料庫：對齊運轉規章 2.8 / 2.0 版 --- */
         const DEFAULT_DB = {
-            version: "動力車乘務員運轉標準作業程序第3.1版 (115.05.01)",
-            updatedAt: "2026-06-07",
+            version: "動力車乘務員運轉標準作業程序第3.1版 (對齊運轉規章上冊2.8/下冊2.0版)",
+            updatedAt: "2026-06-08",
+            maintainer: "台鐵機務處指導股 (聯絡電話：02-23815226 / 信箱：rs@railway.gov.tw)",
+            globalImages: {
+                "嚮導通信式（合用）": "",
+                "嚮導通信式（不合用）": "",
+                "變更複線運轉不變更閉塞": "",
+                "通信式": "",
+                "鄰線變更通信式 本線變更複線運轉": "",
+                "車站本位指令書": "",
+                "列車本位指令書": ""
+            },
             lines: {
                 "縱貫線北段": ["七堵", "汐止", "南港", "松山", "台北", "萬華", "板橋", "樹林", "樹調"],
                 "宜蘭線": ["八堵", "暖暖", "四腳亭", "瑞芳", "猴硐", "三貂嶺", "牡丹", "雙溪", "貢寮(不派站長)", "福隆", "石城", "大里", "大溪", "龜山", "外澳", "頭城", "頂埔", "礁溪", "四城", "宜蘭", "二結", "中里", "羅東", "冬山", "新馬", "蘇澳新"]
@@ -45,35 +71,35 @@
             stations: {
                 "七堵": {
                     "desc": "一等大站。設有複數出發號誌機。",
+                    "radioChannel": "第一頻道 (CH1)",
                     "signals": [
-                        { "id": "up_1st_dep", "name": "上行第一出發號誌機", "type": "departure", "options": ["複線運轉", "通信式"] },
-                        { "id": "up_2nd_dep", "name": "上行第二出發號誌機", "type": "departure", "options": ["通信式"] },
-                        { "id": "down_1st_dep", "name": "下行第一出發號誌機", "type": "departure", "options": ["複線運轉", "通信式"] },
-                        { "id": "down_2nd_dep", "name": "下行第二出發號誌機", "type": "departure", "options": ["通信式"] },
-                        { "id": "up_home", "name": "上行進站號誌機", "type": "home", "options": ["就地控制新制", "常規手作"] },
-                        { "id": "down_home", "name": "下行進站號誌機", "type": "home", "options": ["就地控制新制", "常規手作"] }
+                        { "id": "up_1st_dep", "name": "上行第一出發號誌機", "type": "departure", "options": ["變更複線運轉不變更閉塞", "通信式"], "images": {} },
+                        { "id": "up_2nd_dep", "name": "上行第二出發號誌機", "type": "departure", "options": ["通信式"], "images": {} },
+                        { "id": "up_home", "name": "上行進站號誌機", "type": "home", "options": ["就地控制新制", "常規手作"], "images": {} }
                     ]
                 },
                 "南港": {
                     "desc": "上行設有雙出發，下行設有單出發。",
+                    "radioChannel": "第一頻道 (CH1)",
                     "signals": [
-                        { "id": "up_1st_dep", "name": "上行第一出發號誌機", "type": "departure", "options": ["複線運轉", "通信式"] },
-                        { "id": "up_2nd_dep", "name": "上行第二出發號誌機", "type": "departure", "options": ["通信式"] },
-                        { "id": "down_dep", "name": "下行出發號誌機", "type": "departure", "options": ["複線運轉", "通信式"] },
-                        { "id": "up_home", "name": "上行進站號誌機", "type": "home", "options": ["就地控制新制", "常規手作"] },
-                        { "id": "down_home", "name": "下行進站號誌機", "type": "home", "options": ["就地控制新制", "常規手作"] }
-                    ]
-                },
-                "台北": {
-                    "desc": "特等大站。具有複線運轉開關。",
-                    "signals": [
-                        { "id": "up_dep", "name": "上行出發號誌機", "type": "departure", "options": ["複線運轉", "通信式"] },
-                        { "id": "down_dep", "name": "下行出發號誌機", "type": "departure", "options": ["複線運轉", "通信式"] },
-                        { "id": "up_home", "name": "上行進站號誌機", "type": "home", "options": ["常規手作"] },
-                        { "id": "down_home", "name": "下行進站號誌機", "type": "home", "options": ["常規手作"] }
+                        { "id": "up_1st_dep", "name": "上行第一出發號誌機", "type": "departure", "options": ["變更複線運轉不變更閉塞", "通信式"], "images": {} },
+                        { "id": "up_2nd_dep", "name": "上行第二出發號誌機", "type": "departure", "options": ["通信式"], "images": {} },
+                        { "id": "down_dep", "name": "下行出發號誌機", "type": "departure", "options": ["變更複線運轉不變更閉塞", "通信式"], "images": {} }
                     ]
                 }
             }
+        };
+
+        const convertToDirectLink = (url) => {
+            if (!url) return '';
+            const trimmed = url.trim();
+            if (trimmed.includes('drive.google.com')) {
+                const match = trimmed.match(/\/d\/([a-zA-Z0-9_-]+)/);
+                if (match && match[1]) {
+                    return `https://docs.google.com/uc?export=download&id=${match[1]}`;
+                }
+            }
+            return trimmed;
         };
 
         const IconArrowLeft = () => (
@@ -94,31 +120,446 @@
             </svg>
         );
 
-        const TicketVisual = ({ mode, blockNo = "715053-C" }) => (
-            <div className="bg-amber-50 dark:bg-amber-100 text-slate-950 p-4 rounded-2xl border-2 border-amber-300 font-serif text-[10px] md:text-xs shadow-xl leading-relaxed">
-                <div className="text-center font-bold text-xs border-b border-amber-300 pb-1 mb-2 tracking-widest text-slate-800">臺灣鐵路 運轉通告券</div>
-                <div className="grid grid-cols-2 gap-1 mb-2 border-b border-amber-200 pb-1.5">
-                    <div><span className="font-bold border border-slate-400 px-1 mr-1">車次</span> 72 次</div>
-                    <div className="text-right"><span className="font-bold border border-slate-400 px-1 mr-1">日期</span> 115 年 6 月 6 日</div>
-                </div>
-                <div className="space-y-1.5">
-                    <div className="flex justify-between">
-                        <span>指定閉塞區間：<span className="font-bold underline">前方聯絡站 ── 鄰站</span></span>
-                        <span className="font-bold text-red-600 bg-red-100 px-1.5 rounded text-[10px]">{mode}</span>
+        // --- 五大情境運轉通告券模擬器 ---
+        const TicketVisualDigital = ({ mode, blockNo = "715053-C", startStation = "南港", endStation = "汐止", routeName = "東正線", orderNo = "501", dispatcher = "張三" }) => {
+            const [showGuide, setShowGuide] = useState(false);
+            const [activeHotspot, setActiveHotspot] = useState(null);
+
+            const hotspots = useMemo(() => {
+                if (mode === '嚮導通信式（合用）') {
+                    return [
+                        { id: 1, top: '2%', left: '80%', label: '1. 日期確認', desc: '核對日期是否為今日，避免誤拿過期或舊有通告券。' },
+                        { id: 2, top: '15%', left: '20%', label: '2. 車次確認', desc: '核對填寫的車次是否與當前運轉車次相符。' },
+                        { id: 3, top: '15%', left: '85%', label: '3. 站長簽章', desc: '確認發行車站值班站長有親自簽名或蓋章授權。' },
+                        { id: 4, top: '38%', left: '50%', label: '4. 閉塞區間與對策', desc: '確認變更區間，並指定施行「嚮導通信式」閉塞。' },
+                        { id: 5, top: '48%', left: '75%', label: '5. CTC合用聲明', desc: '核對填寫是否與自動閉塞式或中央控制行車制（CTC）「合用」。' },
+                        { id: 6, top: '58%', left: '50%', label: '6. 指定運轉路線', desc: '雙單線或複線變更為單線運轉時，必須指定運轉經由東正線。' },
+                        { id: 7, top: '68%', left: '50%', label: '7. 嚮導同乘註記', desc: '核對是否明確註記「同乘嚮導員，攜帶嚮導證」之攜帶品要點。' },
+                        { id: 8, top: '80%', left: '50%', label: '8. 行車命令與調度員', desc: `查對備註之行車命令（第 ${orderNo} 號）與調度控制員姓名（${dispatcher}）。` }
+                    ];
+                } else if (mode === '嚮導通信式（不合用）') {
+                    return [
+                        { id: 1, top: '2%', left: '80%', label: '1. 日期確認', desc: '核對填發日期是否與當日相符。' },
+                        { id: 2, top: '15%', left: '20%', label: '2. 車次確認', desc: '確認授權車次是否與當前本列車一致。' },
+                        { id: 3, top: '15%', left: '85%', label: '3. 站長簽章', desc: '值班站長必須簽認蓋章。' },
+                        { id: 4, top: '38%', left: '50%', label: '4. 閉塞區間', desc: '變更區間及施行的閉塞方式（嚮導通信式）。' },
+                        { id: 5, top: '48%', left: '75%', label: '5. 不合用聲明', desc: '特別條款：核對填寫是否註明與自動閉塞或中央控制行車制「不合用」。' },
+                        { id: 6, top: '68%', left: '50%', label: '6. 嚮導同乘註記', desc: '確認明確登載「同乘嚮導員」或「攜帶嚮導證」之攜帶品要點。' },
+                        { id: 7, top: '80%', left: '50%', label: '7. 行車命令', desc: `核對並通報行車命令號碼（第 ${orderNo} 號）及調度控制員姓名（${dispatcher}）。` }
+                    ];
+                } else if (mode === '變更複線運轉不變更閉塞') {
+                    return [
+                        { id: 1, top: '2%', left: '80%', label: '1. 日期確認', desc: '確認填發之中華民國日期是否與當日日期相符。' },
+                        { id: 2, top: '15%', left: '20%', label: '2. 車次確認', desc: '確認車次是否與當前本列車車次完全一致。' },
+                        { id: 3, top: '15%', left: '85%', label: '3. 值班站長簽章', desc: '核對填發車站值班站長（或蓋章）是否完整清晰。' },
+                        { id: 4, top: '38%', left: '50%', label: '4. 變更區間', desc: '確認發生號誌不良的站間（如：南港 ─ 汐止間變更經由路線）。' },
+                        { id: 5, top: '56%', left: '60%', label: '5. 代用手作號誌', desc: '確認已註記「出發號誌機不良，以代用手作號誌代替」。' },
+                        { id: 6, top: '65%', left: '50%', label: '6. 行車命令與調度員', desc: `核對並通報行車命令號碼（如第 ${orderNo} 號）及調度控制員姓名（如：${dispatcher}）。` },
+                        { id: 7, top: '82%', left: '50%', label: '7. 不變更閉塞聲明', desc: '關鍵條款：必須註明「變更複線運轉，依表示燈能確認，不變更閉塞方式」，ATP 應保持開啟！' }
+                    ];
+                } else if (mode === '通信式') {
+                    return [
+                        { id: 1, top: '2%', left: '80%', label: '1. 日期確認', desc: '核對日期是否為今日。' },
+                        { id: 2, top: '15%', left: '20%', label: '2. 車次確認', desc: '核對填寫的車次是否與當前運轉車次相符。' },
+                        { id: 3, top: '15%', left: '85%', label: '3. 站長簽章', desc: '確認發行車站值班站長有親自簽名或蓋章授權。' },
+                        { id: 4, top: '38%', left: '50%', label: '4. 閉塞區間與對策', desc: '確認指定施行「通信式」閉塞。' },
+                        { id: 5, top: '48%', left: '75%', label: '5. 與自動閉塞不合用', desc: '核對填寫是否註明與自動閉塞或中央控制行車制「不合用」。' },
+                        { id: 6, top: '75%', left: '50%', label: '6. 行車命令與同意閉塞號碼', desc: `查對行車命令號碼（第 ${orderNo} 號）、同意閉塞紀錄表號碼（如：${blockNo}）及調度員姓名（${dispatcher}）。` }
+                    ];
+                } else if (mode === '鄰線變更通信式 本線變更複線運轉') {
+                    return [
+                        { id: 1, top: '2%', left: '80%', label: '1. 日期確認', desc: '核對填發日期是否與今日相符。' },
+                        { id: 2, top: '15%', left: '20%', label: '2. 車次確認', desc: '確認車次是否一致。' },
+                        { id: 3, top: '15%', left: '85%', label: '3. 站長簽章', desc: '核對填發車站值班站長印。' },
+                        { id: 4, top: '38%', left: '50%', label: '4. 雙正線變更區間', desc: '核對指定區間鄰線變更為通信式單線運轉，本線變更為複線運轉，依表示燈能確認。' },
+                        { id: 5, top: '56%', left: '60%', label: '5. 指定本線運轉與手作號誌', desc: '確認註明本線維持複線運轉、不變更閉塞，且出發號誌機不良以代用手作代替。' },
+                        { id: 6, top: '68%', left: '50%', label: '6. ATP 隔離與否聲明', desc: '依調度命令指示：鄰線通信式列車 ATP 需隔離；本線複線運轉列車 ATP 保持開啟。' },
+                        { id: 7, top: '80%', left: '50%', label: '7. 行車命令與調度員', desc: `核對行車命令號碼（第 ${orderNo} 號）及調度員姓名（${dispatcher}）。` }
+                    ];
+                }
+                return [];
+            }, [mode, orderNo, dispatcher, blockNo]);
+
+            return (
+                <div className="space-y-3">
+                    <div className="flex justify-between items-center">
+                        <span className="text-xs font-bold text-slate-400">數位運轉通告券模擬 (規章標準樣式)</span>
+                        <button
+                            onClick={() => {
+                                setShowGuide(!showGuide);
+                                setActiveHotspot(null);
+                            }}
+                            className="tap-btn text-[10px] font-black px-2.5 py-1.5 rounded-lg border border-blue-500/40 text-blue-400 flex items-center gap-1 bg-blue-600/10"
+                        >
+                            <span>{showGuide ? "📴 關閉核對導讀" : "🔍 啟動防錯核對導讀"}</span>
+                            <span className="bg-red-500 w-1.5 h-1.5 rounded-full animate-pulse"></span>
+                        </button>
                     </div>
-                    {mode === '通信式' && (
-                        <div className="flex justify-between items-center bg-yellow-200/60 p-1.5 rounded border border-yellow-300 mt-1">
-                            <span className="font-bold text-slate-850">⚠️ 同意閉塞紀錄表號碼：</span>
-                            <span className="font-mono font-bold text-xs bg-slate-900 text-yellow-400 px-2 py-0.5 rounded">{blockNo}</span>
+
+                    <div className="relative overflow-hidden bg-amber-50 dark:bg-amber-100 text-slate-950 p-4 rounded-2xl border-2 border-amber-300 shadow-xl font-serif text-[10px] leading-relaxed">
+                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-[0.06] select-none text-red-700 font-bold text-5xl border-4 border-red-700 m-8 rounded-full transform -rotate-12">
+                            臺灣鐵路
+                        </div>
+
+                        <div className="text-center font-bold text-sm border-b border-amber-300 pb-1 mb-2 tracking-widest text-slate-800">臺灣鐵路 運轉通告券</div>
+                        
+                        <div className="grid grid-cols-2 gap-1 mb-2 border-b border-amber-200 pb-1.5">
+                            <div><span className="font-bold border border-slate-400 px-1 mr-1">車次</span> 502 次</div>
+                            <div className="text-right"><span className="font-bold border border-slate-400 px-1 mr-1">日期</span> 115 年 6 月 6 日</div>
+                        </div>
+
+                        <table className="w-full border-collapse border border-slate-400 text-[9px] text-center">
+                            <tbody>
+                                <tr>
+                                    <td className="border border-slate-400 font-bold p-1 bg-amber-100/60 w-1/5">種 別</td>
+                                    <td className="border border-slate-400 p-1 font-bold text-red-700">
+                                        {mode.includes('複線運轉') ? '變更複線運轉 / 路線' : '變更閉塞 / 運轉路線'}
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td className="border border-slate-400 p-1 bg-amber-100/60 font-bold">閉塞區間</td>
+                                    <td className="border border-slate-400 p-1 font-bold">{startStation} ── {endStation} 站間</td>
+                                </tr>
+                                <tr>
+                                    <td className="border border-slate-400 p-1 bg-amber-100/60 font-bold">變更閉塞方式</td>
+                                    <td className="border border-slate-400 p-1 text-slate-800 font-black">
+                                        {mode === '變更複線運轉不變更閉塞' ? '不變更閉塞 (自動閉塞式)' : `${mode} 閉塞式`}
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td className="border border-slate-400 p-1 bg-amber-100/60 font-bold">合用與否</td>
+                                    <td className="border border-slate-400 p-1 font-bold">
+                                        {mode.includes('合用）') ? '與自動閉塞式或CTC【合用】' : '與自動閉塞或中央控制【不合用】'}
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td className="border border-slate-400 p-1 bg-amber-100/60 font-bold">經由路線</td>
+                                    <td className="border border-slate-400 p-1 font-bold text-red-600 underline">{routeName}</td>
+                                </tr>
+                                <tr>
+                                    <td className="border border-slate-400 p-1 bg-amber-100/60 font-bold">備 註</td>
+                                    <td className="border border-slate-400 p-1 text-left space-y-1 p-1.5 font-mono text-[8px] leading-normal bg-white/40">
+                                        {mode === '變更複線運轉不變更閉塞' ? (
+                                            <>
+                                                <div>1. 行車命令第 {orderNo} 號，調度員 {dispatcher}。</div>
+                                                <div>2. 出發號誌不良，以代用手作號誌代替。</div>
+                                                <div className="font-bold text-red-700">3. 變更複線運轉，依表示燈能確認，不變更閉塞方式。</div>
+                                            </>
+                                        ) : mode === '鄰線變更通信式 本線變更複線運轉' ? (
+                                            <>
+                                                <div>1. 行車命令第 {orderNo} 號，調度員 {dispatcher}。</div>
+                                                <div className="font-bold text-red-700">2. 鄰線通信式，本線維持複線運轉，不變更閉塞，代用手作代替。</div>
+                                                <div>3. 出發/進站轉轍器鎖固無誤，速限25km/h。</div>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <div>1. 行車命令第 {orderNo} 號，調度員 {dispatcher}。</div>
+                                                <div className="font-bold text-red-700">2. 同乘嚮導員，攜帶嚮導證，確認行駛{routeName}。</div>
+                                                <div>3. 同意閉塞紀錄表號碼：{blockNo}。</div>
+                                            </>
+                                        )}
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+
+                        <div className="pt-2 flex justify-between text-[8px] text-slate-500 font-mono">
+                            <span>填發者：{startStation} 站長</span>
+                            <span className="font-bold border-b border-dashed border-slate-400 font-sans">值班站長簽章：【李四】印</span>
+                        </div>
+
+                        {showGuide && hotspots.map(spot => {
+                            const isActive = activeHotspot && activeHotspot.id === spot.id;
+                            return (
+                                <button
+                                    key={spot.id}
+                                    onClick={() => setActiveHotspot(spot)}
+                                    style={{ top: spot.top, left: spot.left }}
+                                    className={`absolute w-5 h-5 rounded-full text-[9px] font-black flex items-center justify-center z-20 transition-all pulsing-dot ${
+                                        isActive 
+                                        ? 'bg-red-600 text-white scale-110 shadow-lg shadow-red-500/50' 
+                                        : 'bg-red-500/80 text-white hover:scale-105'
+                                    }`}
+                                >
+                                    {spot.id}
+                                </button>
+                            );
+                        })}
+                    </div>
+
+                    {showGuide && (
+                        <div className="bg-slate-900 border border-slate-800 p-3 rounded-2xl animate-in slide-in-from-top duration-200">
+                            {activeHotspot ? (
+                                <div className="space-y-1">
+                                    <div className="flex items-center space-x-2">
+                                        <span className="bg-red-500/10 text-red-400 font-mono font-black text-xs px-2 py-0.5 rounded border border-red-500/20">
+                                            要點 {activeHotspot.id}
+                                        </span>
+                                        <span className="font-bold text-xs text-white">{activeHotspot.label}</span>
+                                    </div>
+                                    <p className="text-[11px] text-slate-300 leading-relaxed font-mono">
+                                        {activeHotspot.desc}
+                                    </p>
+                                </div>
+                            ) : (
+                                <div className="text-center py-2 text-slate-500 text-[11px] font-mono animate-pulse">
+                                    💡 請點擊票卡上的【紅色發光圈編號】對齊核對說明...
+                                </div>
+                            )}
                         </div>
                     )}
-                    <div className="border-t border-amber-200 pt-1.5 flex justify-between text-[9px] text-slate-500">
-                        <span>發行站：本站值班站長</span>
-                        <span className="font-bold">站長簽章：(簽名或蓋章)</span>
-                    </div>
                 </div>
-            </div>
-        );
+            );
+        };
+
+        const StationCommandVisual = ({ orderNo = "501", dispatcher = "張三", stationName = "南港" }) => {
+            const [showGuide, setShowGuide] = useState(false);
+            const [activeHotspot, setActiveHotspot] = useState(null);
+
+            const hotspots = [
+                { id: 1, top: '2%', left: '80%', label: '1. 日期確認', desc: '確認填發之中華民國日期是否與當日日期相符。' },
+                { id: 2, top: '15%', left: '20%', label: '2. 車次確認', desc: '確認車次是否與當前本列車車次完全一致。' },
+                { id: 3, top: '15%', left: '85%', label: '3. 值班站長簽章', desc: '核對填發車站值班站長（或蓋章）是否完整清晰。' },
+                { id: 4, top: '45%', left: '50%', label: '4. 股道與轉轍器確認', desc: '確認指令書中填寫之調度股道開通正確，轉轍器手搖鎖固栓已插妥。' },
+                { id: 5, top: '75%', left: '50%', label: '5. 行車命令抄錄', desc: `查對口頭授權之行車命令第 ${orderNo} 號，並抄寫調度員【${dispatcher}】姓名。` }
+            ];
+
+            return (
+                <div className="space-y-3">
+                    <div className="flex justify-between items-center">
+                        <span className="text-xs font-bold text-slate-400">數位行車指令書模擬 (車站本位樣式)</span>
+                        <button
+                            onClick={() => {
+                                setShowGuide(!showGuide);
+                                setActiveHotspot(null);
+                            }}
+                            className="tap-btn text-[10px] font-black px-2.5 py-1.5 rounded-lg border border-blue-500/40 text-blue-400 flex items-center gap-1 bg-blue-600/10"
+                        >
+                            <span>{showGuide ? "📴 關閉核對導讀" : "🔍 啟動防錯核對導讀"}</span>
+                        </button>
+                    </div>
+
+                    <div className="relative bg-white text-slate-900 p-5 rounded-2xl border-2 border-slate-300 shadow-xl font-serif text-[10px] leading-relaxed">
+                        <div className="text-center font-bold text-xs border-b border-slate-300 pb-1 mb-2 tracking-widest text-slate-800">臺灣鐵路管理局 行車指令書 (車站本位)</div>
+                        <div className="flex justify-between mb-2 text-[9px]">
+                            <span>車次：第 502 次</span>
+                            <span>日期：115 年 6 月 6 日</span>
+                        </div>
+                        <div className="border border-slate-300 p-2 bg-slate-50 space-y-1.5 mb-2 rounded-lg text-slate-900">
+                            <div>授權發車車站：{stationName} 站</div>
+                            <div>指定開通進路：東正線 / 第 2 股道</div>
+                            <div>轉轍器狀態：【已派專人手搖鎖固並插入安全栓】</div>
+                            <div className="text-red-700 font-bold">調度命令編號：第 {orderNo} 號 (調度控制員 {dispatcher})</div>
+                        </div>
+                        <div className="flex justify-between text-[8px] text-slate-500 pt-1 font-sans">
+                            <span>填寫者：{stationName}站值班站長</span>
+                            <span className="border-b border-dashed border-slate-450">司機員簽認欄：___________</span>
+                        </div>
+
+                        {showGuide && hotspots.map(spot => {
+                            const isActive = activeHotspot && activeHotspot.id === spot.id;
+                            return (
+                                <button
+                                    key={spot.id}
+                                    onClick={() => setActiveHotspot(spot)}
+                                    style={{ top: spot.top, left: spot.left }}
+                                    className={`absolute w-5 h-5 rounded-full text-[9px] font-black flex items-center justify-center z-20 transition-all pulsing-dot ${
+                                        isActive 
+                                        ? 'bg-red-600 text-white scale-110 shadow-lg shadow-red-500/50' 
+                                        : 'bg-red-500/80 text-white hover:scale-105'
+                                    }`}
+                                >
+                                    {spot.id}
+                                </button>
+                            );
+                        })}
+                    </div>
+
+                    {showGuide && activeHotspot && (
+                        <div className="bg-slate-900 border border-slate-800 p-3 rounded-2xl animate-in slide-in-from-top duration-200">
+                            <div className="space-y-1">
+                                <div className="flex items-center space-x-2">
+                                    <span className="bg-red-500/10 text-red-400 font-mono font-black text-xs px-2 py-0.5 rounded border border-red-500/20">
+                                        要點 {activeHotspot.id}
+                                    </span>
+                                    <span className="font-bold text-xs text-white">{activeHotspot.label}</span>
+                                </div>
+                                <p className="text-[11px] text-slate-300 leading-relaxed font-mono">
+                                    {activeHotspot.desc}
+                                </p>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        const TrainCommandVisual = ({ orderNo = "501", dispatcher = "張三", stationName = "知本" }) => {
+            const [showGuide, setShowGuide] = useState(false);
+            const [activeHotspot, setActiveHotspot] = useState(null);
+
+            const hotspots = [
+                { id: 1, top: '2%', left: '80%', label: '1. 日期確認', desc: '確認司機員親自填寫之中華民國日期是否與今日日期相符。' },
+                { id: 2, top: '15%', left: '20%', label: '2. 車次與車型', desc: '確認授權車次（例如：72次）與目前乘務之動力車編組相符。' },
+                { id: 3, top: '40%', left: '50%', label: '3. 三讀確認行車命令', desc: `透過行車調度無線電，與線上調度控制員三讀確認行車命令編號（第 ${orderNo} 號）。` },
+                { id: 4, top: '65%', left: '50%', label: '4. 受命時間與調度簽認', desc: `抄錄受命時間（時分秒）並登載通話調度員姓名（${dispatcher}）。` },
+                { id: 5, top: '82%', left: '50%', label: '5. 隔離限制速限防護', desc: '核對是否明確在備註中登載「ATP切斷隔離，限速60km/h，轉轍器限速25km/h」並由司機員簽名。' }
+            ];
+
+            return (
+                <div className="space-y-3">
+                    <div className="flex justify-between items-center">
+                        <span className="text-xs font-bold text-slate-400">數位行車指令書模擬 (南迴列車本位樣式)</span>
+                        <button
+                            onClick={() => {
+                                setShowGuide(!showGuide);
+                                setActiveHotspot(null);
+                            }}
+                            className="tap-btn text-[10px] font-black px-2.5 py-1.5 rounded-lg border border-blue-500/40 text-blue-400 flex items-center gap-1 bg-blue-600/10"
+                        >
+                            <span>{showGuide ? "📴 關閉核對導讀" : "🔍 啟動防錯核對導讀"}</span>
+                        </button>
+                    </div>
+
+                    <div className="relative bg-white text-slate-900 p-5 rounded-2xl border-2 border-slate-300 shadow-xl font-serif text-[10px] leading-relaxed">
+                        <div className="text-center font-bold text-xs border-b border-slate-300 pb-1 mb-2 tracking-widest text-slate-800">臺灣鐵路管理局 行車指令書 (列車本位)</div>
+                        <div className="flex justify-between mb-2 text-[9px]">
+                            <span>乘務車次：第 72 次 (動力車本位)</span>
+                            <span>日期：115 年 6 月 6 日</span>
+                        </div>
+                        <div className="border border-red-200 p-2 bg-red-50/60 space-y-1.5 mb-2 rounded-lg text-slate-900">
+                            <div>受命令機車：TED 2001 本務機</div>
+                            <div>授權運行區間：{stationName} 站 機外 / 站內</div>
+                            <div className="text-red-700 font-bold">無線電抄錄命令：第 {orderNo} 號 (調度控制員 {dispatcher})</div>
+                            <div className="text-slate-600 text-[8px] font-mono">⚠️ 運轉限制：車載 ATP 隔離，正線最高限速 60km/h，分歧轉轍器限速 25km/h。</div>
+                        </div>
+                        <div className="flex justify-between text-[8px] text-slate-500 pt-1 font-mono">
+                            <span>抄錄人：本務司機員 簽名</span>
+                            <span>三讀確認調度員：【{dispatcher}】</span>
+                        </div>
+
+                        {showGuide && hotspots.map(spot => {
+                            const isActive = activeHotspot && activeHotspot.id === spot.id;
+                            return (
+                                <button
+                                    key={spot.id}
+                                    onClick={() => setActiveHotspot(spot)}
+                                    style={{ top: spot.top, left: spot.left }}
+                                    className={`absolute w-5 h-5 rounded-full text-[9px] font-black flex items-center justify-center z-20 transition-all pulsing-dot ${
+                                        isActive 
+                                        ? 'bg-red-600 text-white scale-110 shadow-lg shadow-red-500/50' 
+                                        : 'bg-red-500/80 text-white hover:scale-105'
+                                    }`}
+                                >
+                                    {spot.id}
+                                </button>
+                            );
+                        })}
+                    </div>
+
+                    {showGuide && activeHotspot && (
+                        <div className="bg-slate-900 border border-slate-800 p-3 rounded-2xl animate-in slide-in-from-top duration-200">
+                            <div className="space-y-1">
+                                <div className="flex items-center space-x-2">
+                                    <span className="bg-red-500/10 text-red-400 font-mono font-black text-xs px-2 py-0.5 rounded border border-red-500/20">
+                                        要點 {activeHotspot.id}
+                                    </span>
+                                    <span className="font-bold text-xs text-white">{activeHotspot.label}</span>
+                                </div>
+                                <p className="text-[11px] text-slate-300 leading-relaxed font-mono">
+                                    {activeHotspot.desc}
+                                </p>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        const DualVoucherEngine = ({ mode, blockNo, startStation, endStation, routeName, orderNo, dispatcher, configImageUrl, defaultType }) => {
+            const [viewMode, setViewMode] = useState(configImageUrl ? 'image' : 'digital'); 
+            const [isLightBoxOpen, setIsLightBoxOpen] = useState(false);
+
+            useEffect(() => {
+                setViewMode(configImageUrl ? 'image' : 'digital');
+            }, [configImageUrl]);
+
+            const directImageUrl = useMemo(() => {
+                return convertToDirectLink(configImageUrl);
+            }, [configImageUrl]);
+
+            return (
+                <div className="space-y-4">
+                    {configImageUrl && (
+                        <div className="flex justify-end">
+                            <button
+                                onClick={() => setViewMode(viewMode === 'image' ? 'digital' : 'image')}
+                                className="tap-btn bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-xl text-[10px] font-bold text-slate-400 hover:text-white flex items-center gap-1"
+                            >
+                                🔄 切換至 {viewMode === 'image' ? '數位模擬感應查核' : '實體憑證範本圖片'}
+                            </button>
+                        </div>
+                    )}
+
+                    {viewMode === 'image' && directImageUrl ? (
+                        <div className="space-y-2">
+                            <div className="relative group overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 flex justify-center items-center">
+                                <img 
+                                    src={directImageUrl} 
+                                    alt="實體憑證樣式"
+                                    className="max-h-72 object-contain rounded-2xl cursor-pointer hover:opacity-90 transition-opacity p-2"
+                                    onClick={() => setIsLightBoxOpen(true)}
+                                    onError={() => {
+                                        setViewMode('digital');
+                                    }}
+                                />
+                                <div className="absolute bottom-2 right-2 bg-black/70 px-2 py-1 rounded text-[8px] text-slate-300 font-mono tracking-widest pointer-events-none">
+                                    點擊放大
+                                </div>
+                            </div>
+                            <p className="text-[9px] text-slate-500 text-center font-mono italic">提示：此圖片由範本系統自動加載渲染，可點擊全螢幕核對。</p>
+                        </div>
+                    ) : (
+                        defaultType === 'token' ? (
+                            <TokenVisual />
+                        ) : defaultType === 'pilot' ? (
+                            <PilotVisual />
+                        ) : defaultType === 'stationCommand' ? (
+                            <StationCommandVisual orderNo={orderNo} dispatcher={dispatcher} stationName={startStation} />
+                        ) : defaultType === 'trainCommand' ? (
+                            <TrainCommandVisual orderNo={orderNo} dispatcher={dispatcher} stationName={startStation} />
+                        ) : (
+                            <TicketVisualDigital 
+                                mode={mode}
+                                blockNo={blockNo}
+                                startStation={startStation}
+                                endStation={endStation}
+                                routeName={routeName}
+                                orderNo={orderNo}
+                                dispatcher={dispatcher}
+                            />
+                        )
+                    )}
+
+                    {isLightBoxOpen && directImageUrl && (
+                        <div 
+                            className="fixed inset-0 bg-black/95 backdrop-blur-md z-[100] flex flex-col justify-center items-center p-4 animate-in fade-in duration-200"
+                            onClick={() => setIsLightBoxOpen(false)}
+                        >
+                            <div className="absolute top-4 right-4 text-slate-400 hover:text-white text-sm font-bold bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-full cursor-pointer">
+                                關閉 ❌
+                            </div>
+                            <img 
+                                src={directImageUrl} 
+                                alt="實體憑證全螢幕檢視" 
+                                className="max-w-full max-h-[85vh] object-contain rounded-lg shadow-2xl"
+                            />
+                            <p className="text-xs text-slate-400 mt-4 font-mono select-none">點擊任意處退出全螢幕檢視</p>
+                        </div>
+                    )}
+                </div>
+            );
+        };
 
         const TokenVisual = () => (
             <div className="flex flex-col items-center justify-center p-4 bg-slate-900/80 rounded-2xl border border-slate-800 shadow-md">
@@ -174,7 +615,7 @@
             }, []);
 
             const stationMeta = useMemo(() => {
-                return db.stations[selectedStation] || { desc: '', signals: [] };
+                return db.stations[selectedStation] || { desc: '', radioChannel: '第一頻道 (CH1)', signals: [] };
             }, [selectedStation, db]);
 
             const handleReset = () => {
@@ -183,6 +624,62 @@
                 setSelectedSignal(null);
                 setSelectedOption('');
             };
+
+            const isAtpIsolated = useMemo(() => {
+                return (
+                    selectedOption === '嚮導通信式（不合用）' || 
+                    selectedOption === '通信式' || 
+                    selectedOption === '路牌' || 
+                    selectedOption === '嚮導' || 
+                    selectedOption === '車站本位指令書' || 
+                    selectedOption === '列車本位指令書' || 
+                    selectedOption === '嚮導通信式(單線)'
+                );
+            }, [selectedOption]);
+
+            const regulationRef = useMemo(() => {
+                if (!selectedOption) return '';
+                switch (selectedOption) {
+                    case '變更複線運轉不變更閉塞':
+                        return '運轉規章(上冊) 行車實施要點第七節';
+                    case '通信式':
+                        return '運轉規章(上冊) 行車實施要點第八節';
+                    case '路牌':
+                        return '運轉規章(上冊) 行車實施要點第十節';
+                    case '嚮導通信式（合用）':
+                    case '嚮導通信式（不合用）':
+                    case '嚮導':
+                    case '嚮導通信式(單線)':
+                        return '運轉規章(上冊) 行車實施要點第十一節';
+                    case '車站本位指令書':
+                        return '運轉規章(上冊) 行車特定事項第 138 條';
+                    case '列車本位指令書':
+                        return '運轉規章(上冊) 南迴線列車本位運轉處理要點';
+                    case '就地控制新制':
+                        return '動力車乘務員運轉 SOP 1-1-3 條 (特定事項 138 條新制)';
+                    case '常規手作':
+                        return '運轉規章(上冊) 鐵路行車規則第七章';
+                    default:
+                        return '國營臺灣鐵路股份有限公司運轉規章';
+                }
+            }, [selectedOption]);
+
+            const configuredImageUrl = useMemo(() => {
+                if (!selectedSignal || !selectedOption) return '';
+                const localUrl = selectedSignal.images?.[selectedOption];
+                if (localUrl && localUrl.trim() !== '') return localUrl;
+                const globalUrl = db.globalImages?.[selectedOption];
+                if (globalUrl && globalUrl.trim() !== '') return globalUrl;
+                return '';
+            }, [selectedSignal, selectedOption, db.globalImages]);
+
+            const defaultType = useMemo(() => {
+                if (selectedOption === '路牌') return 'token';
+                if (selectedOption === '嚮導') return 'pilot';
+                if (selectedOption === '車站本位指令書') return 'stationCommand';
+                if (selectedOption === '列車本位指令書') return 'trainCommand';
+                return 'ticket';
+            }, [selectedOption]);
 
             return (
                 <div className="min-h-screen bg-slate-950 text-slate-100 pb-12">
@@ -227,6 +724,14 @@
 
                     <main className="max-w-md mx-auto p-4 space-y-5">
                         
+                        {/* 🌟 核心：智慧動態段別維護者資訊展示區 */}
+                        {db.maintainer && (
+                            <div className="bg-slate-900/60 p-4 rounded-3xl border border-slate-850/80 shadow-md space-y-1.5">
+                                <span className="text-[10px] text-slate-500 font-mono block uppercase">🔧 本系統數據維護責任段別：</span>
+                                <p className="text-xs text-blue-400 font-bold leading-relaxed">{db.maintainer}</p>
+                            </div>
+                        )}
+
                         {/* STEP 1: 選擇區域線路 */}
                         <div className="bg-slate-900/60 p-4 rounded-3xl border border-slate-850/80 shadow-md space-y-3">
                             <label className="text-xs font-black text-slate-400 tracking-wider block uppercase">步驟 1：選擇行車路線區間</label>
@@ -270,10 +775,19 @@
                             </div>
                         )}
 
-                        {/* STEP 3: 選擇故障號誌 (完全依據該車站的動態號誌配置清單) */}
+                        {/* STEP 3: 選擇故障號誌 */}
                         {selectedStation && (
                             <div className="bg-slate-900/60 p-4 rounded-3xl border border-slate-850/80 shadow-md space-y-3 animate-in fade-in duration-200">
                                 <label className="text-xs font-black text-slate-400 tracking-wider block uppercase">步驟 3：選擇故障之號誌機</label>
+                                
+                                {/* 2.8版調度無線電頻道指示 */}
+                                <div className="bg-slate-950/80 p-2.5 rounded-xl border border-slate-850 flex justify-between items-center text-[10px]">
+                                    <span className="text-slate-500 font-bold font-mono uppercase">📡 本站調度無線電頻道：</span>
+                                    <span className="bg-blue-600/10 text-blue-400 font-black px-2 py-0.5 rounded border border-blue-500/20 font-mono">
+                                        {stationMeta.radioChannel || "第一頻道 (CH1)"}
+                                    </span>
+                                </div>
+
                                 <div className="grid grid-cols-1 gap-2">
                                     {stationMeta.signals && stationMeta.signals.length > 0 ? (
                                         stationMeta.signals.map(sig => (
@@ -292,7 +806,7 @@
                                             </button>
                                         ))
                                     ) : (
-                                        <div className="text-xs text-slate-500 text-center py-2">目前後台未配置此車站號誌數據，請前往後台勾選設定。</div>
+                                        <div className="text-xs text-slate-500 text-center py-2">目前後台未配置此車站號誌數據，請前往後台設定。</div>
                                     )}
                                 </div>
                             </div>
@@ -316,7 +830,7 @@
                             </div>
                         )}
 
-                        {/* FINAL OUTPUT: SOP 輸出與憑證視覺化區 */}
+                        {/* FINAL OUTPUT: SOP 輸出與憑證雙軌展示區 */}
                         {selectedSignal && (selectedSignal.options.length === 0 || selectedOption) && (
                             <div className="space-y-5 animate-in slide-in-from-bottom duration-300">
                                 
@@ -330,87 +844,58 @@
                                                 (當前處置對策：{selectedOption || '常規手作'})
                                             </span>
                                         </h2>
+                                        {/* 規章依據顯示 */}
+                                        <div className="mt-1.5 text-[9px] text-slate-500 font-bold bg-slate-950 px-2 py-0.5 rounded border border-slate-850 inline-block font-mono">
+                                            📜 規章依據：{regulationRef}
+                                        </div>
                                     </div>
                                     <div className="bg-slate-950 p-3 rounded-2xl border border-slate-800 text-lg shadow-inner">
                                         <svg className="w-6 h-6 text-blue-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect width="16" height="16" x="4" y="2" rx="2"/><path d="M4 10h16M12 2v8M8 18H5M19 18h-3M8 22l1.5-3M16 22l-1.5-3"/></svg>
                                     </div>
                                 </div>
 
-                                {/* 憑證圖形模擬 */}
+                                {/* 憑證圖形雙軌引擎 */}
                                 <div className="bg-slate-900 p-5 rounded-3xl border border-slate-800 shadow-xl space-y-4">
-                                    <h3 className="text-xs font-black text-slate-500 tracking-wider uppercase">憑證/攜帶品實物檢查</h3>
-                                    
-                                    {selectedOption === '通信式' && <TicketVisual mode="通信式" />}
-                                    {selectedOption === '複線運轉' && <TicketVisual mode="不變更閉塞" />}
-                                    {selectedOption === '路牌' && <TokenVisual />}
-                                    {selectedOption === '嚮導' && <PilotVisual />}
-                                    
-                                    {selectedOption === '指令式(無人站)' && (
-                                        <div className="bg-amber-950/20 border border-amber-800/60 p-4 rounded-2xl text-amber-300 text-xs leading-relaxed">
-                                            <span className="font-bold block text-sm mb-1">📋 抄本乙(行車命令書) 檢查要點：</span>
-                                            1. 需登載「抄本號碼」、「授權車次」、「發行日期」與「調度控制員姓名」。<br />
-                                            2. 抵達前方聯絡站後，需立即向調度員辦理登記作廢。
-                                        </div>
-                                    )}
-                                    {selectedOption === '指令式(乙簡站)' && (
-                                        <div className="bg-amber-950/20 border border-amber-800/60 p-4 rounded-2xl text-amber-300 text-xs leading-relaxed">
-                                            <span className="font-bold block text-sm mb-1">📋 乙種簡易站(無副站長) 處置憑證：</span>
-                                            1. 司機員必須親自下車至月台手搖把箱電話處聯繫調度控制員。<br />
-                                            2. 依指令手搖扳轉並鎖固轉轍器（確認手搖把插入鎖固），填寫兩份指令書。
-                                        </div>
-                                    )}
-                                    {selectedOption === '常規手作' && (
-                                        <div className="bg-emerald-950/15 border border-emerald-900/40 p-4 rounded-2xl text-emerald-300 text-xs leading-relaxed">
-                                            <span className="font-bold block text-sm mb-1">📋 常規手作進站憑證：</span>
-                                            1. 機外停車，以無線電與值班站長聯絡。<br />
-                                            2. 進站前，確認車站派員顯示之「代用手作進站號誌（綠色手旗/綠燈）」。
-                                        </div>
-                                    )}
-                                    {selectedOption === '就地控制新制' && (
-                                        <div className="bg-emerald-950/15 border border-emerald-900/40 p-4 rounded-2xl text-emerald-300 text-xs leading-relaxed">
-                                            <span className="font-bold block text-sm mb-1">📋 就地控制站免指令命令：</span>
-                                            1. 依3.1版1-1-3新制，改為就地控制站，無需接受調度員行車命令！<br />
-                                            2. 聽從現場值班站長指導，確認手作進站號誌顯示即可。
-                                        </div>
-                                    )}
-                                    {selectedOption === '無人站進站' && (
-                                        <div className="bg-amber-950/20 border border-amber-800/60 p-4 rounded-2xl text-amber-300 text-xs leading-relaxed">
-                                            <span className="font-bold block text-sm mb-1">📋 無人站進站處置：</span>
-                                            1. 機外停車後，以無線電聯繫調度員。<br />
-                                            2. 抄錄行車指令書，並由調度指派之專人到場鎖固、確認轉轍器開通正確。
-                                        </div>
-                                    )}
-                                    {selectedOption === '乙簡站進站' && (
-                                        <div className="bg-amber-950/20 border border-amber-800/60 p-4 rounded-2xl text-amber-300 text-xs leading-relaxed">
-                                            <span className="font-bold block text-sm mb-1">📋 乙簡站進站處置：</span>
-                                            1. 機外停車，司機員攜帶行調下車，至月台手搖把箱電話處通報調度。<br />
-                                            2. 依調度指示手搖鎖固轉轍器，抄寫兩份行車命令書，確認進路正確。
-                                        </div>
-                                    )}
-                                    {selectedOption === '嚮導通信式(單線)' && (
-                                        <div className="bg-amber-950/20 border border-amber-800/60 p-4 rounded-2xl text-amber-300 text-xs leading-relaxed">
-                                            <span className="font-bold block text-sm mb-1">📋 單線嚮導通信式(不合用)憑證：</span>
-                                            1. 攜帶並查對「嚮導證」，確認區間、日期、車次妥當。<br />
-                                            2. **嚮導員無須上車同行**。
-                                        </div>
-                                    )}
+                                    <DualVoucherEngine 
+                                        mode={selectedOption}
+                                        blockNo="715053-C"
+                                        startStation={selectedStation}
+                                        endStation={selectedStation === '南港' ? '汐止' : '鄰站'}
+                                        routeName={selectedStation === '南港' ? '東正線' : '指定正線'}
+                                        orderNo="501"
+                                        dispatcher="張三"
+                                        configImageUrl={configuredImageUrl}
+                                        defaultType={defaultType}
+                                    />
                                 </div>
 
                                 {/* ATP 與行車安全防護面板 */}
                                 <div className="bg-slate-900 p-5 rounded-3xl border border-slate-800 shadow-xl space-y-4">
                                     <h3 className="text-xs font-black text-slate-500 tracking-wider uppercase">安全與 ATP 防護設定</h3>
                                     
-                                    {/* ATP 狀態膠囊 */}
-                                    <div className="flex items-center justify-between p-3 rounded-2xl bg-slate-950/60 border border-slate-850">
-                                        <span className="text-xs font-bold text-slate-400">車載 ATP 行車防護切換</span>
-                                        {(selectedOption === '通信式' || selectedOption === '路牌' || selectedOption === '嚮導' || selectedOption === '指令式(乙簡站)' || selectedOption === '乙簡站進站' || selectedOption === '嚮導通信式(單線)') ? (
-                                            <span className="text-xs font-black bg-red-500/15 text-red-400 border border-red-500/30 px-3 py-1 rounded-full animate-pulse flex items-center gap-1">
-                                                🔴 ATP 隔離 (切斷關閉)
-                                            </span>
-                                        ) : (
-                                            <span className="text-xs font-black bg-yellow-500/15 text-yellow-400 border border-yellow-500/30 px-3 py-1 rounded-full flex items-center gap-1">
-                                                🟡 啟動越過險阻 (不關ATP)
-                                            </span>
+                                    {/* ATP 狀態與隔離限速膠囊 */}
+                                    <div className="space-y-2">
+                                        <div className="flex items-center justify-between p-3 rounded-2xl bg-slate-950/60 border border-slate-850">
+                                            <span className="text-xs font-bold text-slate-400">車載 ATP 行車防護切換</span>
+                                            {isAtpIsolated ? (
+                                                <span className="text-xs font-black bg-red-500/15 text-red-400 border border-red-500/30 px-3 py-1 rounded-full animate-pulse flex items-center gap-1">
+                                                    🔴 ATP 隔離 (切斷關閉)
+                                                </span>
+                                            ) : (
+                                                <span className="text-xs font-black bg-yellow-500/15 text-yellow-400 border border-yellow-500/30 px-3 py-1 rounded-full flex items-center gap-1">
+                                                    🟡 啟動越過險阻 (不隔離)
+                                                </span>
+                                            )}
+                                        </div>
+
+                                        {/* 2.8版 ATP 隔離限速 */}
+                                        {isAtpIsolated && (
+                                            <div className="flex items-center justify-between p-3 rounded-2xl bg-red-950/20 border border-red-900/30">
+                                                <span className="text-xs font-bold text-red-400 font-mono">⚠️ 隔離後最大限制速度：</span>
+                                                <span className="text-xs font-black bg-red-600 text-white px-3 py-1 rounded-full">
+                                                    MAX 60 km/h
+                                                </span>
+                                            </div>
                                         )}
                                     </div>
 
@@ -435,11 +920,11 @@
                                                 <div className="flex items-start gap-2.5"><span className="text-blue-400 font-bold">01.</span><p>值班站長必須派員交付運轉通告券，確認已填寫「同意閉塞紀錄表號碼」且無任何縮改。</p></div>
                                                 <div className="flex items-start gap-2.5"><span className="text-blue-400 font-bold">02.</span><p>站方顯示「代用手作出發號誌（綠旗/綠燈）」，出發比照注意信號條件行駛。</p></div>
                                                 <div className="flex items-start gap-2.5"><span className="text-blue-400 font-bold">03.</span><p>通過分歧轉轍器速度不得超過 25 公里，如無法確認進路開通正確，必須立即停車！</p></div>
-                                                <div className="flex items-start gap-2.5"><span className="text-blue-400 font-bold">04.</span><p>關閉車載 ATP 運轉，確認僅行駛指定路線。到達前方站內後，重開 ATP。</p></div>
+                                                <div className="flex items-start gap-2.5"><span className="text-blue-400 font-bold">04.</span><p>關閉車載 ATP 運轉，並切換限速備援系統。此時運轉最大限制速度為 60km/h。抵達前方站內後始得重開 ATP。</p></div>
                                             </>
                                         )}
                                         
-                                        {selectedOption === '複線運轉' && (
+                                        {selectedOption === '變更複線運轉不變更閉塞' && (
                                             <>
                                                 <div className="flex items-start gap-2.5 bg-emerald-950/20 p-2.5 rounded-xl border border-emerald-900/40"><span className="text-emerald-400 font-bold">★優</span><p className="text-emerald-300 font-bold">本站具備複線運轉開關！故不變更閉塞方式（按原自動閉塞），ATP 無需關閉隔離。</p></div>
                                                 <div className="flex items-start gap-2.5"><span className="text-blue-400 font-bold">01.</span><p>確認收到站方交付之運轉通告券，項目確認為「不變更閉塞方式」。</p></div>
@@ -451,7 +936,7 @@
                                         {selectedOption === '路牌' && (
                                             <>
                                                 <div className="flex items-start gap-2.5"><span className="text-blue-400 font-bold">01.</span><p>必須確實核對實體路牌，確認其形狀為「圓形」，且上端刻有指定區段字樣。</p></div>
-                                                <div className="flex items-start gap-2.5"><span className="text-blue-400 font-bold">02.</span><p>站方顯示「代用手作號誌」開車，關閉車載 ATP 隔離，分歧轉轍器限速 25km/h。</p></div>
+                                                <div className="flex items-start gap-2.5"><span className="text-blue-400 font-bold">02.</span><p>站方顯示「代用手作號誌」開車，關閉車載 ATP 隔離，分歧轉轍器限速 25km/h。隔離後最高速限 60km/h。</p></div>
                                                 <div className="flex items-start gap-2.5"><span className="text-blue-400 font-bold">03.</span><p>抵達前方聯絡站後，必須立即停車並交付路牌，重啟車載 ATP。</p></div>
                                             </>
                                         )}
@@ -467,22 +952,7 @@
                                         {selectedOption === '嚮導通信式(單線)' && (
                                             <>
                                                 <div className="flex items-start gap-2.5"><span className="text-blue-400 font-bold">01.</span><p>確認查對嚮導證無誤。依規章規定，此為不合用狀態，**嚮導員無需上車同行**。</p></div>
-                                                <div className="flex items-start gap-2.5"><span className="text-blue-400 font-bold">02.</span><p>必須關閉車載 ATP 進行隔離，列車比照通信式注意信號行駛，轉轍器速限 25km/h。</p></div>
-                                            </>
-                                        )}
-
-                                        {selectedOption === '指令式(無人站)' && (
-                                            <>
-                                                <div className="flex items-start gap-2.5"><span className="text-blue-400 font-bold">01.</span><p>與調度控制員通話取得行車指令書，確認轉轍器已由站方指派專人手搖並鎖固妥當。</p></div>
-                                                <div className="flex items-start gap-2.5"><span className="text-blue-400 font-bold">02.</span><p>列車出發限速 25km/h 通過轉轍器。抵達前方聯絡站後，聯絡調度將指令書作廢。</p></div>
-                                            </>
-                                        )}
-
-                                        {selectedOption === '指令式(乙簡站)' && (
-                                            <>
-                                                <div className="flex items-start gap-2.5"><span className="text-blue-400 font-bold">01.</span><p>司機員親自下車至手搖把箱電話處聯繫調度。依口令抄寫兩份指令書（一式兩份）。</p></div>
-                                                <div className="flex items-start gap-2.5"><span className="text-blue-400 font-bold">02.</span><p>手搖扳轉並確認鎖固轉轍器。關閉車載 ATP 隔離，通過限速 25km/h。</p></div>
-                                                <div className="flex items-start gap-2.5"><span className="text-blue-400 font-bold">03.</span><p>無代用手作號誌顯示，由列車長發給開車號訊後開車。到站後交還指令書並開啟 ATP。</p></div>
+                                                <div className="flex items-start gap-2.5"><span className="text-blue-400 font-bold">02.</span><p>必須關閉車載 ATP 進行隔離，列車比照通信式注意信號行駛，轉轍器速限 25km/h，ATP隔離最大限制速度為 60km/h。</p></div>
                                             </>
                                         )}
 
@@ -502,19 +972,39 @@
                                                 <div className="flex items-start gap-2.5"><span className="text-blue-400 font-bold">03.</span><p>ATP 免隔離，按壓「啟動越過險阻」進站.分歧轉轍器限速 25km/h 通過。</p></div>
                                             </>
                                         )}
-
-                                        {selectedOption === '無人站進站' && (
+                                        
+                                        {selectedOption === '嚮導通信式（合用）' && (
                                             <>
-                                                <div className="flex items-start gap-2.5"><span className="text-blue-400 font-bold">01.</span><p>機外停車。以無線電通報調度員。依指示填寫並核對行車指令書。</p></div>
-                                                <div className="flex items-start gap-2.5"><span className="text-blue-400 font-bold">02.</span><p>調度會指派專員至現場手搖並鎖固轉轍器。確認開通正確，限速 25km/h 通過進站。</p></div>
+                                                <div className="flex items-start gap-2.5"><span className="text-blue-400 font-bold">01.</span><p>值班站長交付運轉通告券，確認已填寫「同意閉塞紀錄表號碼」，且核對與自動閉塞式或中央控制行車制（CTC）「合用」。</p></div>
+                                                <div className="flex items-start gap-2.5"><span className="text-blue-400 font-bold">02.</span><p>確認嚮導證區間、日期、車次妥當。**嚮導員必須親自上車同行**。車載 ATP 不用關閉隔離。</p></div>
                                             </>
                                         )}
 
-                                        {selectedOption === '乙簡站進站' && (
+                                        {selectedOption === '嚮導通信式（不合用）' && (
                                             <>
-                                                <div className="flex items-start gap-2.5"><span className="text-blue-400 font-bold">01.</span><p>機外停車。司機員攜帶行調下車，至月台手搖把箱電話處通報調度。</p></div>
-                                                <div className="flex items-start gap-2.5"><span className="text-blue-400 font-bold">02.</span><p>司機員自行手搖轉轍器，進路正確後必須插妥手搖把。隔離 ATP 運轉。</p></div>
-                                                <div className="flex items-start gap-2.5"><span className="text-blue-400 font-bold">03.</span><p>列車長確認車門關閉後給予開車號訊，列車限速 25km/h 進站停車辦客。</p></div>
+                                                <div className="flex items-start gap-2.5"><span className="text-blue-400 font-bold">01.</span><p>值班站長交付運轉通告券，項目填寫為「不合用」。必須**關閉車載 ATP 隔離（限速 60km/h）**。</p></div>
+                                                <div className="flex items-start gap-2.5"><span className="text-blue-400 font-bold">02.</span><p>核對並確認嚮導同乘。本線以注意信號限制運轉（25km/h），抵達前方站後重開 ATP。</p></div>
+                                            </>
+                                        )}
+
+                                        {selectedOption === '鄰線變更通信式 本線變更複線運轉' && (
+                                            <>
+                                                <div className="flex items-start gap-2.5"><span className="text-blue-400 font-bold">01.</span><p>此為雙正線不對稱調度。核對本線變更為複線運轉、不變更閉塞；鄰線變更為通信式單線運轉。</p></div>
+                                                <div className="flex items-start gap-2.5"><span className="text-blue-400 font-bold">02.</span><p>本線列車車載 ATP 無需隔離，按壓「啟動越過險阻」出發，轉轍器限速 25km/h 通過。</p></div>
+                                            </>
+                                        )}
+
+                                        {selectedOption === '車站本位指令書' && (
+                                            <>
+                                                <div className="flex items-start gap-2.5"><span className="text-blue-400 font-bold">01.</span><p>機外停車。司機員攜帶無線電行調與本站值班站長核對手作號誌及指令書內容。</p></div>
+                                                <div className="flex items-start gap-2.5"><span className="text-blue-400 font-bold">02.</span><p>確認股道及轉轍器開通並完成人工防護鎖固後，抄寫指令，關閉車載 ATP（速限 60km/h）進站。</p></div>
+                                            </>
+                                        )}
+
+                                        {selectedOption === '列車本位指令書' && (
+                                            <>
+                                                <div className="flex items-start gap-2.5"><span className="text-blue-400 font-bold">01.</span><p>南迴線特定區間故障改列車本位。司機員於機車上，透過行調無線電直接與線上調度控制員三讀通話抄錄行車指令書。</p></div>
+                                                <div className="flex items-start gap-2.5"><span className="text-blue-400 font-bold">02.</span><p>完成口頭三讀複誦確認。隔離車載 ATP 運轉，最大速限為 60km/h，轉轍器速限 25km/h。</p></div>
                                             </>
                                         )}
                                     </div>
@@ -525,7 +1015,7 @@
                                     <IconAlert />
                                     <div className="text-xs text-red-300 leading-relaxed font-mono">
                                         <strong className="block text-red-400 mb-0.5">⚠️ 轉轍器進路安全防範</strong>
-                                        通過任何分歧轉轍器時，若前輪有轉向異常或無法由表示燈/手作確認開通方向，司機員必須「立即停車確認」！
+                                        通過 any 分歧轉轍器時，若前輪有轉向異常或無法由表示燈/手作確認開通方向，司機員必須「立即停車確認」！
                                     </div>
                                 </div>
 
